@@ -269,7 +269,12 @@ async function generateEmailReply(gameState, player, originalEmail, playerReply)
   Original message: ${originalEmail.body}
   MP's reply: "${playerReply}"
   
-  Generate the sender's follow-up response. Keep it realistic and matching their persona. Return ONLY a valid JSON object with the key "body" containing the text of the reply.`;
+  Evaluate this interaction and generate the sender's follow-up response. Return ONLY a valid JSON object with the following keys:
+  - "body": string (the text of the sender's reply)
+  - "approval_change": integer (between -5 and 5, how this affects public approval, or 0)
+  - "party_change": integer (between -5 and 5, how this affects their standing with the party whip, or 0)
+  - "memory_note": string (1 brief sentence summarizing the email exchange to serve as long-term memory for future events, or null if inconsequential)
+  - "mp_relationship_changes": array of objects [{"mp_name": "Full Name", "change": integer (-5 to 5)}], or empty array`;
   const content = await callAI([{ role: 'user', content: 'Generate the reply.' }], systemPrompt);
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   return JSON.parse(jsonMatch[0]);

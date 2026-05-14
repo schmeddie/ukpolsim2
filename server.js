@@ -465,6 +465,14 @@ app.post('/api/emails/:id/reply', wrap(async (req, res) => {
     
   const aiReply = await generateEmailReply(state, player, original, reply);
   
+  const newApproval = Math.max(0, Math.min(100, player.approval_rating + (aiReply.approval_change || 0)));
+  const newParty = Math.max(0, Math.min(100, player.party_standing + (aiReply.party_change || 0)));
+  db.prepare('UPDATE player SET approval_rating = ?, party_standing = ? WHERE id = ?').run([newApproval, newParty, player.id]);
+  if (aiReply.memory_note) {
+    db.prepare('INSERT INTO player_memories (game_date, memory_text) VALUES (?, ?)').run([state.game_date, aiReply.memory_note]);
+  }
+  processRelationshipChanges(db, aiReply.mp_relationship_changes);
+  
   let [hh, mm] = state.game_time.split(':').map(Number);
   mm += 5; if(mm >= 60){ hh += 1; mm -= 60; }
   const delTime = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;

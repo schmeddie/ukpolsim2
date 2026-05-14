@@ -707,6 +707,8 @@ async function sendEmailReply(id) {
     input.value = '';
     input.disabled = false;
     loadEmails();
+    player = await api('/api/character');
+    updateTopbar();
   } catch(e) { toast(e.message, 'error'); input.disabled = false; }
 }
 
