@@ -212,6 +212,7 @@ document.getElementById('btn-save-character').addEventListener('click', async ()
 
   if (!name) { toast('Enter your name', 'error'); return; }
   if (!constituency) { toast('Select a constituency', 'error'); return; }
+  if (!allConstituencies.includes(constituency)) { toast('Please select a valid constituency from the list', 'error'); return; }
   if (!selectedBackstory) { toast('Choose a backstory', 'error'); return; }
 
   await api('/api/character', 'POST', {
@@ -280,23 +281,26 @@ function initGame() {
   showScreen('screen-game');
   showTab('dashboard');
 
-  document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
-    btn.addEventListener('click', () => showTab(btn.dataset.tab));
-  });
+  if (!window.gameInitialized) {
+    document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => showTab(btn.dataset.tab));
+    });
 
-  document.getElementById('btn-advance').addEventListener('click', advanceDay);
-  document.getElementById('btn-mark-all-read').addEventListener('click', markAllRead);
-  document.getElementById('btn-new-game').addEventListener('click', newGame);
-  document.getElementById('btn-save-gs').addEventListener('click', saveGameSettings);
+    document.getElementById('btn-advance').addEventListener('click', advanceDay);
+    document.getElementById('btn-mark-all-read').addEventListener('click', markAllRead);
+    document.getElementById('btn-new-game').addEventListener('click', newGame);
+    document.getElementById('btn-save-gs').addEventListener('click', saveGameSettings);
 
-  // MP filters
-  let mpSearchTimeout;
-  document.getElementById('mp-search').addEventListener('input', e => {
-    clearTimeout(mpSearchTimeout);
-    mpSearchTimeout = setTimeout(() => { mpSearchQuery = e.target.value; mpPage = 0; loadMPs(); }, 300);
-  });
-  document.getElementById('mp-party-filter').addEventListener('change', e => { mpPartyFilter = e.target.value; mpPage = 0; loadMPs(); });
-  document.getElementById('mp-region-filter').addEventListener('change', e => { mpRegionFilter = e.target.value; mpPage = 0; loadMPs(); });
+    // MP filters
+    let mpSearchTimeout;
+    document.getElementById('mp-search').addEventListener('input', e => {
+      clearTimeout(mpSearchTimeout);
+      mpSearchTimeout = setTimeout(() => { mpSearchQuery = e.target.value; mpPage = 0; loadMPs(); }, 300);
+    });
+    document.getElementById('mp-party-filter').addEventListener('change', e => { mpPartyFilter = e.target.value; mpPage = 0; loadMPs(); });
+    document.getElementById('mp-region-filter').addEventListener('change', e => { mpRegionFilter = e.target.value; mpPage = 0; loadMPs(); });
+    window.gameInitialized = true;
+  }
 
   // Load game settings
   loadGameSettings();
@@ -372,8 +376,8 @@ async function loadDashboardNews() {
   }
   document.getElementById('news-list').innerHTML = news.slice(0, 5).map(n => `
     <div class="news-item">
-      <div class="news-headline">${n.headline}</div>
-      <div class="news-meta"><span class="cat cat-${n.category}">${n.category}</span> ${n.source}</div>
+      <div class="news-headline">${escHtml(n.headline)}</div>
+      <div class="news-meta"><span class="cat cat-${n.category}">${n.category}</span> ${escHtml(n.source)}</div>
     </div>`).join('');
   updateNewsTicker(news);
 }
@@ -381,7 +385,7 @@ async function loadDashboardNews() {
 function updateNewsTicker(news) {
   const ticker = document.getElementById('news-ticker');
   if (!news.length) { ticker.innerHTML = ''; return; }
-  const items = news.map(n => `<span class="ticker-item"><strong>${n.source}:</strong> ${n.headline}</span>`).join('');
+  const items = news.map(n => `<span class="ticker-item"><strong>${escHtml(n.source)}:</strong> ${escHtml(n.headline)}</span>`).join('');
   ticker.innerHTML = `<div class="ticker-inner">${items}${items}</div>`;
 }
 
@@ -400,8 +404,8 @@ async function loadUpcomingEvents() {
         <div class="month">${d.toLocaleDateString('en-GB', { month: 'short' })}</div>
       </div>
       <div>
-        <div class="event-title">${e.title}</div>
-        <div class="event-desc">${e.description.slice(0, 80)}…</div>
+        <div class="event-title">${escHtml(e.title)}</div>
+        <div class="event-desc">${escHtml(e.description).slice(0, 80)}…</div>
       </div>
     </div>`;
   }).join('');
@@ -605,7 +609,7 @@ async function loadMPs() {
   const tbody = document.getElementById('mp-tbody');
 
   tbody.innerHTML = mps.map(mp => `
-    <tr onclick="showMpModal(${mp.id})" data-mp='${JSON.stringify({ id: mp.id, name: mp.name, party: mp.party, constituency: mp.constituency, region: mp.region, role: mp.role, age: mp.age, gender: mp.gender, backstory: mp.backstory })}'>
+    <tr onclick="showMpModal(${mp.id})" data-mp="${escHtml(JSON.stringify({ id: mp.id, name: mp.name, party: mp.party, constituency: mp.constituency, region: mp.region, role: mp.role, age: mp.age, gender: mp.gender, backstory: mp.backstory }))}">
       <td><span class="mp-party-dot" style="background:${partyColor(mp.party)}"></span>${escHtml(mp.name)}${mp.is_player ? ' ⭐' : ''}</td>
       <td>${escHtml(mp.party)}</td>
       <td>${escHtml(mp.constituency)}</td>

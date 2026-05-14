@@ -32,9 +32,9 @@ app.get('/api/settings', wrap((req, res) => {
 
 app.post('/api/settings', wrap((req, res) => {
   const { ai_provider, api_key, ai_model, custom_endpoint } = req.body;
-  if (ai_provider) setSetting('ai_provider', ai_provider);
-  if (api_key && !api_key.includes('•')) setSetting('api_key', api_key);
-  if (ai_model) setSetting('ai_model', ai_model);
+  if (ai_provider !== undefined) setSetting('ai_provider', ai_provider);
+  if (api_key !== undefined && !api_key.includes('•')) setSetting('api_key', api_key);
+  if (ai_model !== undefined) setSetting('ai_model', ai_model);
   if (custom_endpoint !== undefined) setSetting('custom_endpoint', custom_endpoint);
   res.json({ ok: true });
 }));
@@ -126,9 +126,13 @@ app.post('/api/game/new', wrap((req, res) => {
     throw e;
   }
 
+  const playerRole = (finalPmName === player.name) ? 'Prime Minister' : 'Backbencher';
+  if (playerRole === 'Prime Minister') {
+    db.prepare('UPDATE mps SET role = ? WHERE role = ?').run(['Backbencher', 'Prime Minister']);
+  }
   db.prepare('UPDATE mps SET name = ?, first_name = ?, last_name = ?, party = ?, role = ? WHERE is_player = 1')
     .run([player.name, player.name.split(' ')[0], player.name.split(' ').slice(1).join(' '),
-          player.party, 'Backbencher']);
+          player.party, playerRole]);
 
   seedInitialCalendar(db, scenario.start_date);
   res.json({ ok: true, scenario: scenario.name });
@@ -149,7 +153,7 @@ function seedInitialCalendar(db, startDate) {
                              VALUES (?, ?, ?, ?, 0)`);
   for (const e of events) {
     const date = new Date(d);
-    date.setDate(date.getDate() + e.offset);
+    date.setUTCDate(date.getUTCDate() + e.offset);
     insert.run([date.toISOString().split('T')[0], e.title, e.description, e.type]);
   }
 }
@@ -166,7 +170,7 @@ app.post('/api/game/advance', async (req, res, next) => {
     if (!player) return res.status(400).json({ error: 'No player' });
 
     const currentDate = new Date(state.game_date);
-    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     const newDate = currentDate.toISOString().split('T')[0];
     const newDay = state.day_number + 1;
 
