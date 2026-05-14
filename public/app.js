@@ -18,6 +18,7 @@ let dailyEvents = [];
 let calendarCurrentMonth = null;
 let calendarSelectedDate = null;
 let calendarEventsData = [];
+let currentClockInterval = 5000;
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -361,7 +362,18 @@ function startClock() {
   window.clockInterval = setInterval(() => {
     if(window.clockPaused) return;
     tickClock();
-  }, 5000); // 1 game minute = 5 real seconds
+  }, currentClockInterval);
+}
+
+function setTimeSpeed(speedMultiplier) {
+  currentClockInterval = 5000 / speedMultiplier;
+  document.querySelectorAll('.btn-time').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.btn-time[data-speed="${speedMultiplier}"]`)?.classList.add('active');
+  if(window.clockInterval) clearInterval(window.clockInterval);
+  window.clockInterval = setInterval(() => {
+    if(window.clockPaused) return;
+    tickClock();
+  }, currentClockInterval);
 }
 
 async function tickClock() {
