@@ -93,6 +93,16 @@ function formatShortDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+async function fetchGameState() {
+  const oldDate = gameState?.game_date;
+  const oldTime = gameState?.game_time;
+  const newState = await api('/api/game/state');
+  if (newState && oldDate === newState.game_date && oldTime) {
+    newState.game_time = oldTime;
+  }
+  gameState = newState;
+}
+
 // ── Setup: API Config ──────────────────────────────────────────────────────
 
 const providerNotes = {
@@ -419,7 +429,7 @@ function updateTopbar() {
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 async function loadDashboard() {
-  gameState = await api('/api/game/state');
+  await fetchGameState();
   updateTopbar();
   renderProfileCard();
   await Promise.all([loadParliamentMini(), loadDashboardNews(), loadUpcomingEvents()]);
@@ -518,7 +528,7 @@ async function advanceDay() {
 
   try {
     const result = await api('/api/game/advance', 'POST');
-    gameState = await api('/api/game/state');
+    await fetchGameState();
     updateTopbar();
 
     fetchDailyEvents();
@@ -593,7 +603,7 @@ async function openEmail(id) {
   `;
 
   // Update unread count
-  gameState = await api('/api/game/state');
+  await fetchGameState();
   updateTopbar();
 }
 
@@ -617,7 +627,7 @@ async function sendEmailReply(id) {
 async function markAllRead() {
   await api('/api/emails/read-all', 'POST');
   await loadEmails();
-  gameState = await api('/api/game/state');
+  await fetchGameState();
   updateTopbar();
   document.getElementById('email-viewer').innerHTML = '<div class="email-placeholder">Select an email to read</div>';
 }
