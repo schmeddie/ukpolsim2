@@ -50,6 +50,8 @@ function showTab(name) {
   if (name === 'inbox') loadEmails();
   if (name === 'calendar') loadCalendar();
   if (name === 'parliament') loadParliament();
+  if (name === 'government') loadGovernment();
+  if (name === 'office') loadOffice();
   if (name === 'mps') { mpPage = 0; loadMPs(); }
   if (name === 'dashboard') loadDashboard();
 }
@@ -440,7 +442,13 @@ async function submitEventAction() {
   const res = await api(`/api/game/event/${id}/resolve`, 'POST', { action });
   const appText = res.approval_change > 0 ? `+${res.approval_change}` : res.approval_change;
   const partyText = res.party_change > 0 ? `+${res.party_change}` : res.party_change;
-  document.getElementById('event-outcome').innerHTML = `${enrichTextWithMpLinks(res.outcome)}<br><br><span style="font-weight:600;font-size:12px;color:var(--text2)">Stat Changes: Approval ${appText} | Party ${partyText}</span>`;
+  
+  let relText = '';
+  if (res.rel_changes && res.rel_changes.length > 0) {
+    relText = ' | Relations: ' + res.rel_changes.map(rc => `${rc.name} ${rc.change > 0 ? '+' : ''}${rc.change}`).join(', ');
+  }
+  
+  document.getElementById('event-outcome').innerHTML = `${enrichTextWithMpLinks(res.outcome)}<br><br><span style="font-weight:600;font-size:12px;color:var(--text2)">Stat Changes: Approval ${appText} | Party ${partyText}${relText}</span>`;
   document.getElementById('event-close').classList.remove('hidden');
   
   player = await api('/api/character');
@@ -606,6 +614,7 @@ async function advanceDay() {
   try {
     const result = await api('/api/game/advance', 'POST');
     await fetchGameState();
+    player = await api('/api/character');
     updateTopbar();
 
     fetchDailyEvents();
@@ -880,6 +889,89 @@ async function loadParliament() {
   `;
 }
 
+// ── Government ────────────────────────────────────────────────────────────
+
+async function loadGovernment() {
+  const data = await api('/api/government');
+  const container = document.getElementById('government-view');
+  
+  const renderList = (title, mps) => {
+    if (!mps.length) return '';
+    return `
+      <h3 style="margin:20px 0 12px;font-size:16px;color:var(--text2)">${title}</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
+        ${mps.map(mp => `
+          <div class="cabinet-card" onclick="showMpModal(${mp.id})" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:border-color 0.15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;margin-bottom:4px">${mp.role}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="mp-party-dot" style="background:${partyColor(mp.party)}"></span>
+              <span style="font-weight:600;font-size:14px">${escHtml(mp.name)}${mp.is_player ? ' ⭐' : ''}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  };
+
+  container.innerHTML = `
+    <div>
+      ${renderList('The Cabinet', data.cabinet)}
+      ${renderList('Shadow Cabinet', data.shadow)}
+    </div>
+  `;
+}
+
+// ── Office & Staff ────────────────────────────────────────────────────────
+
+async function loadOffice() {
+  const p = await api('/api/character');
+  const staff = [
+    { id: 'staff_pr', name: 'PR Manager', cost: 40000, desc: 'Handles media relations and helps spin public scandals to protect your Approval Rating.', active: p.staff_pr },
+    { id: 'staff_caseworker', name: 'Constituency Caseworker', cost: 30000, desc: 'Manages the inbox, handles constituent complaints, and keeps the locals happy.', active: p.staff_caseworker },
+    { id: 'staff_researcher', name: 'Parliamentary Researcher', cost: 35000, desc: 'Writes speeches, briefs you on upcoming bills, and manages parliamentary tactics.', active: p.staff_researcher }
+  ];
+  
+  const totalBudget = 150000;
+  const spent = staff.filter(s => s.active).reduce((sum, s) => sum + s.cost, 0);
+  const remaining = totalBudget - spent;
+  const pct = (spent / totalBudget) * 100;
+  
+  document.getElementById('office-view').innerHTML = `
+    <div class="budget-container">
+      <div style="display:flex;justify-content:space-between;font-weight:700">
+        <span>Annual Office Budget</span>
+        <span>£${spent.toLocaleString()} spent / £${totalBudget.toLocaleString()}</span>
+      </div>
+      <div class="budget-bar"><div class="budget-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:12px;color:var(--text2)">Remaining available funds: <strong>£${remaining.toLocaleString()}</strong></div>
+    </div>
+    <h3 style="font-size:15px;margin-bottom:12px">Available Staff Candidates</h3>
+    <div class="staff-grid">
+      ${staff.map(s => `
+        <div class="staff-card ${s.active ? 'hired' : ''}">
+          <div class="staff-header">
+            <div>
+              <div class="staff-title">${s.name}</div>
+              <div class="staff-cost">£${s.cost.toLocaleString()} / year</div>
+            </div>
+            ${s.active ? '<span class="staff-badge badge-hired">Hired</span>' : ''}
+          </div>
+          <div class="staff-desc">${s.desc}</div>
+          <button class="btn-sm staff-action" onclick="toggleStaff('${s.id}', ${s.active})">${s.active ? 'Fire Staff Member' : 'Hire Candidate'}</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+window.toggleStaff = async function(role, currentlyHired) {
+  try {
+    await api('/api/office/staff', 'POST', { role, hired: !currentlyHired });
+    toast(currentlyHired ? 'Staff member let go.' : 'Staff member hired!', 'success');
+    loadOffice();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
 // ── MPs ───────────────────────────────────────────────────────────────────
 
 async function loadMPs() {
@@ -895,13 +987,14 @@ async function loadMPs() {
   const tbody = document.getElementById('mp-tbody');
 
   tbody.innerHTML = mps.map(mp => `
-    <tr onclick="showMpModal(${mp.id})" data-mp="${escHtml(JSON.stringify({ id: mp.id, name: mp.name, party: mp.party, constituency: mp.constituency, region: mp.region, role: mp.role, age: mp.age, gender: mp.gender, backstory: mp.backstory }))}">
+    <tr onclick="showMpModal(${mp.id})" data-mp="${escHtml(JSON.stringify({ id: mp.id, name: mp.name, party: mp.party, constituency: mp.constituency, region: mp.region, role: mp.role, age: mp.age, gender: mp.gender, backstory: mp.backstory, relationship: mp.relationship }))}">
       <td><span class="mp-party-dot" style="background:${partyColor(mp.party)}"></span>${escHtml(mp.name)}${mp.is_player ? ' ⭐' : ''}</td>
       <td>${escHtml(mp.party)}</td>
       <td>${escHtml(mp.constituency)}</td>
       <td>${escHtml(mp.region)}</td>
       <td>${escHtml(mp.role)}</td>
       <td>${mp.age}</td>
+      <td><span style="font-weight:600;color:${mp.relationship > 60 ? 'var(--green)' : mp.relationship < 40 ? 'var(--red)' : 'var(--text)'}">${mp.relationship}</span></td>
     </tr>`).join('');
 
   // Pagination
@@ -944,6 +1037,15 @@ async function showMpModal(id) {
         </div>
       </div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px">📍 ${escHtml(mp.constituency)} (${escHtml(mp.region)})</div>
+      <div style="margin:16px 0 20px 0;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em">Relationship Status</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+            <div style="width:${mp.relationship}%;height:100%;background:${mp.relationship > 60 ? 'var(--green)' : mp.relationship < 40 ? 'var(--red)' : 'var(--yellow)'};transition:width 0.3s;"></div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:${mp.relationship > 60 ? 'var(--green)' : mp.relationship < 40 ? 'var(--red)' : 'var(--text)'}">${mp.relationship} / 100</div>
+        </div>
+      </div>
       <div id="mp-profile-area" class="modal-mp-backstory">
         ${mp.profile_text ? enrichTextWithMpLinks(mp.profile_text) : '<div class="spinner-sm" style="margin: 0 auto"></div><div style="text-align:center;margin-top:8px;color:var(--text3)">Researching profile...</div>'}
       </div>

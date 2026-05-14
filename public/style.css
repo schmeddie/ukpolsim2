@@ -717,6 +717,21 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .party-seat-count { font-weight: 700; font-size: 15px; }
 .party-seat-bar { height: 4px; border-radius: 2px; margin-top: 4px; }
 
+/* ── Office & Staff ──────────────────────────────────────────────────────── */
+.budget-container { margin-bottom: 24px; padding: 16px; background: var(--bg3); border-radius: 8px; border: 1px solid var(--border); }
+.budget-bar { height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; margin: 12px 0 8px; }
+.budget-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.staff-card { background: var(--bg2); border: 1px solid var(--border); padding: 16px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.15s, background 0.15s; }
+.staff-card.hired { border-color: var(--green); background: rgba(63,185,80,0.05); }
+.staff-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.staff-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.staff-cost { font-size: 12px; color: var(--text2); font-weight: 600; }
+.staff-desc { font-size: 12px; color: var(--text3); flex: 1; margin-bottom: 12px; }
+.staff-action { margin-top: auto; }
+.staff-badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.badge-hired { background: var(--green); color: #fff; }
+
 /* ── MPs Table ───────────────────────────────────────────────────────────── */
 #mp-table { width: 100%; border-collapse: collapse; }
 #mp-table th {

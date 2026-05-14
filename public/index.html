@@ -150,6 +150,8 @@
     <button class="nav-btn" data-tab="inbox">✉️<span>Inbox <span id="unread-badge" class="badge hidden">0</span></span></button>
     <button class="nav-btn" data-tab="calendar">📅<span>Calendar</span></button>
     <button class="nav-btn" data-tab="parliament">🗳️<span>Parliament</span></button>
+    <button class="nav-btn" data-tab="government">🏛️<span>Government</span></button>
+    <button class="nav-btn" data-tab="office">💼<span>Office</span></button>
     <button class="nav-btn" data-tab="mps">👥<span>MPs</span></button>
     <button class="nav-btn" data-tab="settings-game">⚙️<span>Settings</span></button>
     <button class="nav-btn advance-btn" id="btn-advance">
@@ -219,6 +221,18 @@
       <div id="parliament-view"></div>
     </div>
 
+  <!-- Government -->
+  <div id="tab-government" class="tab">
+    <div class="tab-header"><h2>Cabinet & Shadow Cabinet</h2></div>
+    <div id="government-view"></div>
+  </div>
+
+  <!-- Office -->
+  <div id="tab-office" class="tab">
+    <div class="tab-header"><h2>Office & Staff Management</h2></div>
+    <div id="office-view"></div>
+  </div>
+
     <!-- MPs -->
     <div id="tab-mps" class="tab">
       <div class="tab-header">
@@ -256,7 +270,7 @@
         <table id="mp-table">
           <thead>
             <tr>
-              <th>Name</th><th>Party</th><th>Constituency</th><th>Region</th><th>Role</th><th>Age</th>
+              <th>Name</th><th>Party</th><th>Constituency</th><th>Region</th><th>Role</th><th>Age</th><th>Rel</th>
             </tr>
           </thead>
           <tbody id="mp-tbody"></tbody>

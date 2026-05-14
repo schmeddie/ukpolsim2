@@ -95,22 +95,19 @@ app.post('/api/game/new', wrap((req, res) => {
   const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
   if (!player) return res.status(400).json({ error: 'Create a character first' });
 
-  const pmName = generatePMName(scenario, player.name);
-  const finalPmName = (player.party === scenario.pm_party && Math.random() < 0.05)
-    ? player.name : pmName;
-
   db.prepare('DELETE FROM game_state').run();
   db.prepare('DELETE FROM mps').run();
   db.prepare('DELETE FROM emails').run();
   db.prepare('DELETE FROM calendar_events').run();
   db.prepare('DELETE FROM news_items').run();
   db.prepare('DELETE FROM player_memories').run();
+  db.prepare('DELETE FROM mp_relationships').run();
 
   const govSeats = scenario.seat_distribution[scenario.pm_party] || 0;
   const majority = govSeats > 325;
   db.prepare(`INSERT INTO game_state (id, game_date, scenario_id, scenario_name, pm_name, pm_party, government_majority, day_number)
               VALUES (1, ?, ?, ?, ?, ?, ?, ?)`)
-    .run([scenario.start_date, scenario.id, scenario.name, finalPmName,
+    .run([scenario.start_date, scenario.id, scenario.name, 'TBD',
           scenario.pm_party, majority ? govSeats - 325 : 0, 1]);
 
   const mps = generateMPs(scenario, player.constituency);
@@ -128,13 +125,17 @@ app.post('/api/game/new', wrap((req, res) => {
     throw e;
   }
 
-  const playerRole = (finalPmName === player.name) ? 'Prime Minister' : 'Backbencher';
-  if (playerRole === 'Prime Minister') {
+  const isPlayerPm = (player.party === scenario.pm_party && Math.random() < 0.05);
+  const playerRole = isPlayerPm ? 'Prime Minister' : 'Backbencher';
+  if (isPlayerPm) {
     db.prepare('UPDATE mps SET role = ? WHERE role = ?').run(['Backbencher', 'Prime Minister']);
   }
   db.prepare('UPDATE mps SET name = ?, first_name = ?, last_name = ?, party = ?, role = ? WHERE is_player = 1')
     .run([player.name, player.name.split(' ')[0], player.name.split(' ').slice(1).join(' '),
           player.party, playerRole]);
+          
+  const actualPm = db.prepare("SELECT name FROM mps WHERE role = 'Prime Minister'").get();
+  db.prepare("UPDATE game_state SET pm_name = ? WHERE id = 1").run([actualPm.name]);
 
   seedInitialCalendar(db, scenario.start_date);
   res.json({ ok: true, scenario: scenario.name });
@@ -158,6 +159,23 @@ function seedInitialCalendar(db, startDate) {
     date.setUTCDate(date.getUTCDate() + e.offset);
     insert.run([date.toISOString().split('T')[0], e.time, e.title, e.description, e.type]);
   }
+}
+
+// Helper to safely apply relationship changes driven by AI schema
+function processRelationshipChanges(db, changes) {
+  if (!changes || !Array.isArray(changes)) return [];
+  const applied = [];
+  for (const rc of changes) {
+    if (!rc.mp_name || !rc.change) continue;
+    const target = db.prepare('SELECT id, name FROM mps WHERE name LIKE ? AND is_player = 0').get([`%${rc.mp_name.trim()}%`]);
+    if (target) {
+      const currentScore = db.prepare('SELECT score FROM mp_relationships WHERE mp_id = ?').get([target.id])?.score || 50;
+      const newScore = Math.max(0, Math.min(100, currentScore + rc.change));
+      db.prepare('INSERT INTO mp_relationships (mp_id, score) VALUES (?, ?) ON CONFLICT(mp_id) DO UPDATE SET score = excluded.score').run([target.id, newScore]);
+      applied.push({ name: target.name, change: rc.change });
+    }
+  }
+  return applied;
 }
 
 // ─── Advance Day ─────────────────────────────────────────────────────────────
@@ -206,6 +224,45 @@ app.post('/api/game/advance', async (req, res, next) => {
                                      VALUES (?, ?, ?, ?, ?)`);
       for (const n of news) {
         insertNews.run([newDate, n.headline, n.summary, n.source, n.category]);
+        
+        // MAGIC BRIDGE: AI triggers mechanical game state changes
+        const mech = n.mechanics;
+        if (mech) {
+          if (mech.minister_resigned) {
+            const minister = db.prepare('SELECT * FROM mps WHERE role = ? COLLATE NOCASE').get([mech.minister_resigned]);
+            if (minister && minister.role !== 'Prime Minister') {
+              db.prepare("UPDATE mps SET role = 'Backbencher' WHERE id = ?").run([minister.id]);
+              const replacement = db.prepare("SELECT * FROM mps WHERE party = ? AND role = 'Backbencher' AND is_player = 0 ORDER BY RANDOM() LIMIT 1").get([newState.pm_party]);
+              if (replacement) {
+                db.prepare("UPDATE mps SET role = ? WHERE id = ?").run([minister.role, replacement.id]);
+                db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status) VALUES (?, '09:00', ?, ?, 'party', 1, 'pending')`)
+                  .run([newDate, `Cabinet Resignation: ${minister.role}`, `${minister.name} has resigned. ${replacement.name} has been appointed as their replacement.`]);
+              }
+            }
+          }
+          if (mech.defecting_mp_name && mech.defecting_to_party) {
+            const defector = db.prepare('SELECT * FROM mps WHERE name LIKE ? AND is_player = 0').get([`%${mech.defecting_mp_name.trim()}%`]);
+            if (defector && defector.party !== mech.defecting_to_party) {
+              db.prepare('UPDATE mps SET party = ?, role = ? WHERE id = ?').run([mech.defecting_to_party, 'Backbencher', defector.id]);
+              db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status) VALUES (?, '10:00', ?, ?, 'party', 1, 'pending')`)
+                .run([newDate, `Party Defection`, `${defector.name} has crossed the floor to join ${mech.defecting_to_party}.`]);
+            }
+          }
+          if (mech.byelection_resigning_mp_name && mech.byelection_winning_party) {
+            const steppingDown = db.prepare('SELECT * FROM mps WHERE name LIKE ? AND is_player = 0').get([`%${mech.byelection_resigning_mp_name.trim()}%`]);
+            if (steppingDown) {
+              const newName = generatePMName({ id: Math.random().toString() }, '');
+              db.prepare('UPDATE mps SET name = ?, first_name = ?, last_name = ?, party = ?, role = ? WHERE id = ?').run([newName, newName.split(' ')[0], newName.split(' ').slice(1).join(' '), mech.byelection_winning_party, 'Backbencher', steppingDown.id]);
+              db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status) VALUES (?, '11:00', ?, ?, 'constituency', 1, 'pending')`)
+                .run([newDate, `By-election Result: ${steppingDown.constituency}`, `Following the departure of ${steppingDown.name}, ${newName} has won the seat for ${mech.byelection_winning_party}.`]);
+            }
+          }
+          if (mech.player_approval_change) {
+            const newApp = Math.max(0, Math.min(100, player.approval_rating + mech.player_approval_change));
+            db.prepare('UPDATE player SET approval_rating = ? WHERE id = ?').run([newApp, player.id]);
+          }
+          processRelationshipChanges(db, mech.mp_relationship_changes);
+        }
       }
       results.news = true;
     } catch (err) {
@@ -277,7 +334,38 @@ app.post('/api/game/event/:id/resolve', wrap(async (req, res) => {
   db.prepare('UPDATE calendar_events SET status = ?, outcome = ? WHERE id = ?')
     .run(['resolved', result.outcome, req.params.id]);
     
-  res.json({ outcome: result.outcome, approval_change: result.approval_change, party_change: result.party_change });
+  const relApplied = processRelationshipChanges(db, result.mp_relationship_changes);
+    
+  res.json({ outcome: result.outcome, approval_change: result.approval_change, party_change: result.party_change, rel_changes: relApplied });
+}));
+
+// ─── Office & Staff ─────────────────────────────────────────────────────────
+
+app.post('/api/office/staff', wrap((req, res) => {
+  const db = getDb();
+  const { role, hired } = req.body;
+  const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
+  
+  const staffList = [
+    { id: 'staff_pr', cost: 40000 },
+    { id: 'staff_caseworker', cost: 30000 },
+    { id: 'staff_researcher', cost: 35000 }
+  ];
+  
+  if (!staffList.find(s => s.id === role)) return res.status(400).json({error: 'Invalid role'});
+  
+  if (hired) {
+    let currentSpent = 0;
+    for (const s of staffList) {
+      if (s.id === role) continue;
+      if (player[s.id]) currentSpent += s.cost;
+    }
+    const targetCost = staffList.find(s => s.id === role).cost;
+    if (currentSpent + targetCost > 150000) return res.status(400).json({error: 'Insufficient office budget'});
+  }
+  
+  db.prepare(`UPDATE player SET ${role} = ? WHERE id = ?`).run([hired ? 1 : 0, player.id]);
+  res.json({ ok: true });
 }));
 
 app.get('/api/debug/context', wrap((req, res) => {
@@ -299,7 +387,7 @@ app.get('/api/debug/context', wrap((req, res) => {
 app.get('/api/mps', wrap((req, res) => {
   const db = getDb();
   const { party, region, search, limit = 50, offset = 0 } = req.query;
-  let query = 'SELECT * FROM mps WHERE 1=1';
+  let query = 'SELECT mps.*, COALESCE(r.score, 50) as relationship FROM mps LEFT JOIN mp_relationships r ON mps.id = r.mp_id WHERE 1=1';
   const params = [];
   if (party)  { query += ' AND party = ?';                             params.push(party); }
   if (region) { query += ' AND region = ?';                            params.push(region); }
@@ -326,7 +414,7 @@ app.get('/api/mps/names', wrap((req, res) => {
 
 app.get('/api/mps/:id', wrap((req, res) => {
   const db = getDb();
-  res.json(db.prepare('SELECT * FROM mps WHERE id = ?').get([req.params.id]));
+  res.json(db.prepare('SELECT mps.*, COALESCE(r.score, 50) as relationship FROM mps LEFT JOIN mp_relationships r ON mps.id = r.mp_id WHERE mps.id = ?').get([req.params.id]));
 }));
 
 app.post('/api/mps/:id/generate-profile', wrap(async (req, res) => {
@@ -342,6 +430,14 @@ app.get('/api/parliament/summary', wrap((req, res) => {
   const db = getDb();
   const rows = db.prepare('SELECT party, COUNT(*) as seats FROM mps GROUP BY party ORDER BY seats DESC').all();
   res.json(rows);
+}));
+
+app.get('/api/government', wrap((req, res) => {
+  const db = getDb();
+  const state = db.prepare('SELECT pm_party FROM game_state WHERE id = 1').get();
+  const cabinet = db.prepare("SELECT * FROM mps WHERE role != 'Backbencher' AND party = ? ORDER BY role").all([state.pm_party]);
+  const shadow = db.prepare("SELECT * FROM mps WHERE role != 'Backbencher' AND party != ? ORDER BY role").all([state.pm_party]);
+  res.json({ cabinet, shadow });
 }));
 
 // ─── Emails ──────────────────────────────────────────────────────────────────
