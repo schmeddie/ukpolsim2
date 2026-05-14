@@ -14,6 +14,7 @@ let mpPartyFilter = '';
 let mpRegionFilter = '';
 let mpSearchQuery = '';
 let allConstituencies = [];
+let dailyEvents = [];
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -279,6 +280,8 @@ document.getElementById('btn-start-game').addEventListener('click', async () => 
 function initGame() {
   updateTopbar();
   showScreen('screen-game');
+  fetchDailyEvents();
+  startClock();
   showTab('dashboard');
 
   if (!window.gameInitialized) {
@@ -313,9 +316,92 @@ function initGame() {
   loadGameSettings();
 }
 
+// ── Clock & Time ──────────────────────────────────────────────────────────
+
+function startClock() {
+  if(window.clockInterval) clearInterval(window.clockInterval);
+  window.clockPaused = false;
+  window.clockInterval = setInterval(() => {
+    if(window.clockPaused) return;
+    tickClock();
+  }, 5000); // 1 game minute = 5 real seconds
+}
+
+async function tickClock() {
+  if(!gameState || !gameState.game_time) return;
+  let [hh, mm] = gameState.game_time.split(':').map(Number);
+  mm += 1;
+  if(mm >= 60) { hh += 1; mm -= 60; }
+  
+  if(hh >= 24) {
+    window.clockPaused = true;
+    gameState.game_time = '00:00';
+    document.getElementById('tb-time').textContent = '00:00';
+    toast("Midnight has struck. Time to advance the day.", "success");
+    return;
+  }
+  
+  gameState.game_time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  document.getElementById('tb-time').textContent = gameState.game_time;
+  
+  if(mm % 15 === 0) {
+    api('/api/game/sync-time', 'POST', { time: gameState.game_time }).catch(()=>{});
+    const currentTab = document.querySelector('.tab.active')?.id;
+    if (currentTab === 'tab-inbox') loadEmails();
+    api('/api/game/state').then(s => {
+      gameState.unread_emails = s.unread_emails;
+      updateTopbar();
+    });
+  }
+  checkTriggers();
+}
+
+async function fetchDailyEvents() {
+  try {
+    const events = await api('/api/calendar/today');
+    dailyEvents = events.filter(e => e.status === 'pending' && e.event_time);
+  } catch(e) {}
+}
+
+function checkTriggers() {
+  const current = gameState.game_time;
+  const trigger = dailyEvents.find(e => e.event_time <= current && e.status === 'pending');
+  if (trigger) {
+    window.clockPaused = true;
+    document.getElementById('event-title').textContent = trigger.title;
+    document.getElementById('event-desc').textContent = trigger.description;
+    document.getElementById('event-outcome').classList.add('hidden');
+    document.getElementById('event-action-area').classList.remove('hidden');
+    document.getElementById('event-close').classList.add('hidden');
+    document.getElementById('event-input').value = '';
+    document.getElementById('event-modal').dataset.eventId = trigger.id;
+    document.getElementById('event-modal').classList.remove('hidden');
+  }
+}
+
+async function submitEventAction() {
+  const id = document.getElementById('event-modal').dataset.eventId;
+  const action = document.getElementById('event-input').value;
+  if(!action) return;
+  
+  document.getElementById('event-action-area').classList.add('hidden');
+  document.getElementById('event-outcome').textContent = 'Generating outcome...';
+  document.getElementById('event-outcome').classList.remove('hidden');
+  
+  const res = await api(`/api/game/event/${id}/resolve`, 'POST', { action });
+  document.getElementById('event-outcome').textContent = res.outcome;
+  document.getElementById('event-close').classList.remove('hidden');
+  
+  const ev = dailyEvents.find(e => e.id == id);
+  if (ev) ev.status = 'resolved';
+}
+
+function closeEventModal() { document.getElementById('event-modal').classList.add('hidden'); window.clockPaused = false; }
+
 function updateTopbar() {
   if (!gameState) return;
   document.getElementById('tb-date').textContent = formatDate(gameState.game_date);
+  document.getElementById('tb-time').textContent = gameState.game_time;
   document.getElementById('tb-day').textContent = `Day ${gameState.day_number}`;
   if (player) {
     document.getElementById('tb-player').textContent = player.name;
@@ -425,6 +511,7 @@ async function advanceDay() {
   const label = document.getElementById('advance-label');
   const spinner = document.getElementById('advance-spinner');
 
+  window.clockPaused = true;
   btn.disabled = true;
   label.classList.add('hidden');
   spinner.classList.remove('hidden');
@@ -434,6 +521,8 @@ async function advanceDay() {
     gameState = await api('/api/game/state');
     updateTopbar();
 
+    fetchDailyEvents();
+    window.clockPaused = false;
     let msg = `Advanced to ${formatDate(result.new_date)}`;
     if (result.errors?.length) msg += ` (⚠ ${result.errors.join('; ')})`;
     toast(msg, result.errors?.length ? 'error' : 'success');
@@ -465,7 +554,7 @@ async function loadEmails() {
   list.innerHTML = emails.map(e => `
     <div class="email-list-item ${e.read ? '' : 'unread'}" onclick="openEmail(${e.id})" data-id="${e.id}">
       <div class="email-sender">
-        <span>${e.read ? '' : '<span class="unread-dot"></span>'}${escHtml(e.sender_name)}</span>
+        <span>${e.read ? '' : '<span class="unread-dot"></span>'}${e.is_player ? 'You: ' : ''}${escHtml(e.sender_name)}</span>
         <span class="email-date">${formatShortDate(e.game_date)}</span>
       </div>
       <div class="email-subject">${escHtml(e.subject)}</div>
@@ -484,21 +573,45 @@ async function openEmail(id) {
 
   const typeLabels = { constituent: 'Constituent', party: 'Party', media: 'Media', lobby: 'Lobby', colleague: 'Colleague' };
 
+  let senderDisplay = email.is_player ? `<strong>You</strong> to ${email.sender_name}` : `From: <strong>${escHtml(email.sender_name)}</strong>`;
   document.getElementById('email-viewer').innerHTML = `
     <div class="email-view-header">
       <div class="email-view-subject">${escHtml(email.subject)}</div>
       <div class="email-view-meta">
-        <span>From: <strong>${escHtml(email.sender_name)}</strong> &lt;${escHtml(email.sender_email)}&gt;</span>
+        <span>${senderDisplay} &lt;${escHtml(email.sender_email)}&gt;</span>
         <span>${formatDate(email.game_date)}</span>
+        <span>${email.delivery_time}</span>
         <span class="email-type-badge type-${email.email_type}">${typeLabels[email.email_type] || email.email_type}</span>
       </div>
     </div>
-    <div class="email-view-body">${escHtml(email.body)}</div>
+    <div class="email-view-body ${email.is_player ? 'player-email-body' : ''}">${escHtml(email.body)}</div>
+    ${email.is_player ? '' : `
+    <div class="email-reply-area">
+      <textarea id="email-reply-input" placeholder="Write a reply..."></textarea>
+      <button class="btn-sm" onclick="sendEmailReply(${email.id})">Send Reply</button>
+    </div>`}
   `;
 
   // Update unread count
   gameState = await api('/api/game/state');
   updateTopbar();
+}
+
+async function sendEmailReply(id) {
+  const input = document.getElementById('email-reply-input');
+  const reply = input.value.trim();
+  if(!reply) return;
+  
+  input.disabled = true;
+  toast('Sending reply...', 'info');
+  
+  try {
+    await api(`/api/emails/${id}/reply`, 'POST', { reply });
+    toast('Reply sent! They will respond shortly.', 'success');
+    input.value = '';
+    input.disabled = false;
+    loadEmails();
+  } catch(e) { toast(e.message, 'error'); input.disabled = false; }
 }
 
 async function markAllRead() {

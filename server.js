@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { getDb, getSetting, setSetting, getAllSettings } = require('./database');
-const { generateEmails, generateNews, generateCalendarEvents } = require('./ai-service');
+const { generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply } = require('./ai-service');
 const { generateMPs, generatePMName, SCENARIOS, CONSTITUENCIES } = require('./mp-generator');
 
 const app = express();
@@ -81,7 +81,7 @@ app.get('/api/game/state', wrap((req, res) => {
   const db = getDb();
   const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
   if (!state) return res.json(null);
-  const unread = db.prepare('SELECT COUNT(*) as cnt FROM emails WHERE read = 0').get();
+  const unread = db.prepare('SELECT COUNT(*) as cnt FROM emails WHERE read = 0 AND ((game_date < ?) OR (game_date = ? AND delivery_time <= ?))').get([state.game_date, state.game_date, state.game_time]);
   res.json({ ...state, unread_emails: unread.cnt });
 }));
 
@@ -149,8 +149,8 @@ function seedInitialCalendar(db, startDate) {
     { offset: 21, title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
     { offset: 28, title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
   ];
-  const insert = db.prepare(`INSERT INTO calendar_events (event_date, title, description, event_type, is_generated)
-                             VALUES (?, ?, ?, ?, 0)`);
+  const insert = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
+                             VALUES (?, '12:00', ?, ?, ?, 0, 'pending')`);
   for (const e of events) {
     const date = new Date(d);
     date.setUTCDate(date.getUTCDate() + e.offset);
@@ -174,8 +174,8 @@ app.post('/api/game/advance', async (req, res, next) => {
     const newDate = currentDate.toISOString().split('T')[0];
     const newDay = state.day_number + 1;
 
-    db.prepare('UPDATE game_state SET game_date = ?, day_number = ? WHERE id = 1')
-      .run([newDate, newDay]);
+    db.prepare('UPDATE game_state SET game_date = ?, day_number = ?, game_time = ? WHERE id = 1')
+      .run([newDate, newDay, '07:00']);
 
     const recentNews = db.prepare('SELECT headline FROM news_items ORDER BY id DESC LIMIT 5').all()
       .map(n => n.headline);
@@ -185,10 +185,10 @@ app.post('/api/game/advance', async (req, res, next) => {
 
     try {
       const emails = await generateEmails(newState, player, recentNews);
-      const insertEmail = db.prepare(`INSERT INTO emails (game_date, sender_name, sender_email, subject, body, email_type)
-                                      VALUES (?, ?, ?, ?, ?, ?)`);
+      const insertEmail = db.prepare(`INSERT INTO emails (game_date, delivery_time, sender_name, sender_email, subject, body, email_type)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?)`);
       for (const e of emails) {
-        insertEmail.run([newDate, e.sender_name, e.sender_email, e.subject, e.body, e.email_type]);
+        insertEmail.run([newDate, e.delivery_time || '08:00', e.sender_name, e.sender_email, e.subject, e.body, e.email_type]);
       }
       results.emails = true;
     } catch (err) {
@@ -210,8 +210,8 @@ app.post('/api/game/advance', async (req, res, next) => {
     if (newDay % 5 === 0) {
       try {
         const events = await generateCalendarEvents(newState, player);
-        const insertEvent = db.prepare(`INSERT INTO calendar_events (event_date, title, description, event_type, is_generated)
-                                        VALUES (?, ?, ?, ?, 1)`);
+        const insertEvent = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
+                                        VALUES (?, '12:00', ?, ?, ?, 1, 'pending')`);
         for (const e of events) {
           insertEvent.run([e.event_date, e.title, e.description, e.event_type]);
         }
@@ -221,11 +221,51 @@ app.post('/api/game/advance', async (req, res, next) => {
       }
     }
 
+    // Generate Today's specific schedule
+    try {
+      const dailyEvents = await generateDailyEvents(newState, player);
+      const insertDaily = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
+                                      VALUES (?, ?, ?, ?, ?, 1, 'pending')`);
+      for (const e of dailyEvents) {
+        insertDaily.run([newDate, e.event_time, e.title, e.description, e.event_type]);
+      }
+      results.daily_events = true;
+    } catch (err) {
+      results.errors.push(`Daily Schedule: ${err.message}`);
+    }
+
     res.json({ ok: true, new_date: newDate, day: newDay, ...results });
   } catch (err) {
     next(err);
   }
 });
+
+app.post('/api/game/sync-time', wrap((req, res) => {
+  const db = getDb();
+  db.prepare('UPDATE game_state SET game_time = ? WHERE id = 1').run([req.body.time]);
+  res.json({ ok: true });
+}));
+
+app.get('/api/calendar/today', wrap((req, res) => {
+  const db = getDb();
+  const state = db.prepare('SELECT game_date FROM game_state WHERE id = 1').get();
+  res.json(db.prepare(`SELECT * FROM calendar_events WHERE event_date = ? ORDER BY event_time ASC`).all([state.game_date]));
+}));
+
+app.post('/api/game/event/:id/resolve', wrap(async (req, res) => {
+  const db = getDb();
+  const { action } = req.body;
+  const event = db.prepare('SELECT * FROM calendar_events WHERE id = ?').get([req.params.id]);
+  const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
+  const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
+  
+  const result = await resolveEventAction(state, player, event, action);
+  
+  db.prepare('UPDATE calendar_events SET status = ?, outcome = ? WHERE id = ?')
+    .run(['resolved', result.outcome, req.params.id]);
+    
+  res.json({ outcome: result.outcome });
+}));
 
 // ─── MPs ─────────────────────────────────────────────────────────────────────
 
@@ -262,11 +302,35 @@ app.get('/api/parliament/summary', wrap((req, res) => {
 
 app.get('/api/emails', wrap((req, res) => {
   const db = getDb();
+  const state = db.prepare('SELECT game_date, game_time FROM game_state WHERE id = 1').get();
   const { unread_only } = req.query;
-  let query = 'SELECT * FROM emails';
+  let query = 'SELECT * FROM emails WHERE (game_date < ?) OR (game_date = ? AND delivery_time <= ?)';
+  const params = [state.game_date, state.game_date, state.game_time];
   if (unread_only === 'true') query += ' WHERE read = 0';
   query += ' ORDER BY id DESC';
-  res.json(db.prepare(query).all());
+  res.json(db.prepare(query).all(params));
+}));
+
+app.post('/api/emails/:id/reply', wrap(async (req, res) => {
+  const db = getDb();
+  const { reply } = req.body;
+  const original = db.prepare('SELECT * FROM emails WHERE id = ?').get([req.params.id]);
+  const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
+  const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
+  
+  db.prepare(`INSERT INTO emails (game_date, delivery_time, sender_name, sender_email, subject, body, email_type, read, is_player) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`)
+    .run([state.game_date, state.game_time, player.name, `${player.name.replace(' ','')}@parliament.uk`, `Re: ${original.subject}`, reply, original.email_type]);
+    
+  const aiReply = await generateEmailReply(state, player, original, reply);
+  
+  let [hh, mm] = state.game_time.split(':').map(Number);
+  mm += 5; if(mm >= 60){ hh += 1; mm -= 60; }
+  const delTime = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  
+  db.prepare(`INSERT INTO emails (game_date, delivery_time, sender_name, sender_email, subject, body, email_type, read, is_player) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`)
+    .run([state.game_date, delTime, original.sender_name, original.sender_email, `Re: ${original.subject}`, aiReply.body, original.email_type]);
+    
+  res.json({ ok: true });
 }));
 
 app.get('/api/emails/:id', wrap((req, res) => {

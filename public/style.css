@@ -540,6 +540,10 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .type-colleague { background: rgba(31,111,235,0.2); color: #7ab8f5; }
 .email-view-body { font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
 
+.email-reply-area { margin-top:20px; padding-top:20px; border-top:1px solid var(--border); }
+.email-reply-area textarea { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:10px; margin-bottom:10px; resize:vertical; min-height:80px; font-family:inherit; }
+.player-email-body { background:var(--bg3); border-left:3px solid var(--accent); padding:12px; margin-top:10px; border-radius:4px; font-style:italic; }
+
 /* ── Calendar ────────────────────────────────────────────────────────────── */
 .calendar-group { margin-bottom: 24px; }
 .calendar-month-header {

@@ -47,6 +47,7 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS game_state (
       id INTEGER PRIMARY KEY DEFAULT 1,
       game_date TEXT NOT NULL,
+      game_time TEXT NOT NULL DEFAULT '07:00',
       scenario_id TEXT NOT NULL,
       scenario_name TEXT NOT NULL,
       pm_name TEXT NOT NULL,
@@ -74,21 +75,27 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS emails (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       game_date TEXT NOT NULL,
+      delivery_time TEXT NOT NULL DEFAULT '07:00',
       sender_name TEXT NOT NULL,
       sender_email TEXT NOT NULL,
       subject TEXT NOT NULL,
       body TEXT NOT NULL,
       email_type TEXT NOT NULL,
       read INTEGER NOT NULL DEFAULT 0,
+      thread_id INTEGER,
+      is_player INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS calendar_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_date TEXT NOT NULL,
+      event_time TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL,
       event_type TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      outcome TEXT,
       is_generated INTEGER NOT NULL DEFAULT 0
     );
 
@@ -101,6 +108,15 @@ function initSchema() {
       category TEXT NOT NULL
     );
   `);
+
+  // Auto-migrate schema for new features on existing databases
+  try { db.exec("ALTER TABLE game_state ADD COLUMN game_time TEXT NOT NULL DEFAULT '07:00'"); } catch(e){}
+  try { db.exec("ALTER TABLE calendar_events ADD COLUMN event_time TEXT"); } catch(e){}
+  try { db.exec("ALTER TABLE calendar_events ADD COLUMN status TEXT DEFAULT 'pending'"); } catch(e){}
+  try { db.exec("ALTER TABLE calendar_events ADD COLUMN outcome TEXT"); } catch(e){}
+  try { db.exec("ALTER TABLE emails ADD COLUMN delivery_time TEXT DEFAULT '07:00'"); } catch(e){}
+  try { db.exec("ALTER TABLE emails ADD COLUMN thread_id INTEGER"); } catch(e){}
+  try { db.exec("ALTER TABLE emails ADD COLUMN is_player INTEGER NOT NULL DEFAULT 0"); } catch(e){}
 }
 
 function getSetting(key) {

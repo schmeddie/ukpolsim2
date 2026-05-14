@@ -122,6 +122,7 @@ Return ONLY a valid JSON array. Each object must have:
 - "subject": string
 - "body": string (2-4 paragraphs, formal but readable)
 - "email_type": one of "constituent", "party", "media", "lobby", "colleague"
+- "delivery_time": string (HH:MM format, realistic random time between 07:30 and 21:00)
 
 Make the tone vary: some urgent, some mundane, some amusing. Reference real UK political issues (NHS, housing, energy, transport). Be creative with constituent complaints - they can be wonderfully British.`;
 
@@ -197,4 +198,48 @@ Return ONLY a valid JSON array. Each object must have:
   return JSON.parse(jsonMatch[0]);
 }
 
-module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents };
+async function generateDailyEvents(gameState, player) {
+  const { game_date, scenario_name } = gameState;
+  const systemPrompt = `You are generating a daily event schedule for a UK political simulation game.
+  Date: ${game_date}
+  Player: ${player.name}, ${player.party} MP for ${player.constituency}
+  
+  Generate 2 to 4 career-focused political events for TODAY. Focus on parliamentary business, media ambushes, constituent crises, or party drama. Skip mundane personal things.
+  
+  Return ONLY a valid JSON array. Each object must have:
+  - "event_time": string (HH:MM format, realistic times between 08:00 and 20:00)
+  - "title": string
+  - "description": string (1-2 sentences)
+  - "event_type": one of "pmqs", "vote", "committee", "debate", "party", "constituency", "other"`;
+  
+  const content = await callAI([{ role: 'user', content: 'Generate today\'s events.' }], systemPrompt);
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  return JSON.parse(jsonMatch[0]);
+}
+
+async function resolveEventAction(gameState, player, event, action) {
+  const systemPrompt = `You are the game master for a UK political simulator.
+  Player: ${player.name}, ${player.party} MP for ${player.constituency}.
+  Event: ${event.title} - ${event.description}
+  The MP decided to: "${action}"
+  
+  Generate a realistic, immersive outcome for this action (2-3 sentences). Focus on the political consequences. Return ONLY a valid JSON object with the key "outcome".`;
+  const content = await callAI([{ role: 'user', content: 'Resolve this action.' }], systemPrompt);
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch[0]);
+}
+
+async function generateEmailReply(gameState, player, originalEmail, playerReply) {
+  const systemPrompt = `You are roleplaying as a sender replying to an MP in a UK political simulator.
+  Player: ${player.name}, ${player.party} MP.
+  Sender: ${originalEmail.sender_name} (${originalEmail.email_type})
+  Original message: ${originalEmail.body}
+  MP's reply: "${playerReply}"
+  
+  Generate the sender's follow-up response. Keep it realistic and matching their persona. Return ONLY a valid JSON object with the key "body" containing the text of the reply.`;
+  const content = await callAI([{ role: 'user', content: 'Generate the reply.' }], systemPrompt);
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch[0]);
+}
+
+module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply };

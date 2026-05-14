@@ -127,6 +127,7 @@
     </div>
     <div class="topbar-centre">
       <span id="tb-date" class="topbar-date">—</span>
+      <span id="tb-time" class="topbar-date" style="margin-left:8px;color:var(--accent)">07:00</span>
       <span id="tb-day" class="topbar-daynum">Day 1</span>
     </div>
     <div class="topbar-right">
@@ -303,6 +304,20 @@
 
 <!-- Toast -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- Event Modal -->
+<div id="event-modal" class="modal hidden">
+  <div class="modal-content">
+    <h2 id="event-title" style="margin-bottom:8px">Event</h2>
+    <p id="event-desc" style="font-size:14px;color:var(--text2);margin-bottom:16px"></p>
+    <div id="event-action-area">
+      <textarea id="event-input" rows="3" placeholder="What do you do?" style="width:100%;margin-bottom:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;"></textarea>
+      <button class="btn-primary" onclick="submitEventAction()">Take Action</button>
+    </div>
+    <div id="event-outcome" class="hidden" style="padding:12px;background:rgba(63,185,80,0.1);border-left:3px solid var(--green);margin-bottom:16px;font-size:14px;"></div>
+    <button id="event-close" class="btn-primary hidden" onclick="closeEventModal()">Close & Continue</button>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
