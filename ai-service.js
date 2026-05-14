@@ -27,31 +27,51 @@ async function callAI(messages, systemPrompt = null) {
     body.transforms = ['middle-out'];
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`AI API error (${response.status}): ${text.slice(0, 300)}`);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`AI API error (${response.status}): ${text.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.choices || !data.choices[0]) {
+      throw new Error('Unexpected API response format');
+    }
+
+    return data.choices[0].message.content;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('AI API request timed out after 60 seconds.');
+    }
+    throw error;
   }
-
-  const data = await response.json();
-
-  if (!data.choices || !data.choices[0]) {
-    throw new Error('Unexpected API response format');
-  }
-
-  return data.choices[0].message.content;
 }
 
 function getEndpoint(provider, customEndpoint) {
   switch (provider) {
     case 'openai': return 'https://api.openai.com/v1/chat/completions';
     case 'openrouter': return 'https://openrouter.ai/api/v1/chat/completions';
-    case 'custom': return customEndpoint || 'https://api.openai.com/v1/chat/completions';
+    case 'custom': {
+      let endpoint = customEndpoint || 'https://api.openai.com/v1/chat/completions';
+      endpoint = endpoint.trim();
+      if (!endpoint.endsWith('/chat/completions')) {
+        endpoint = endpoint.replace(/\/$/, '') + '/chat/completions';
+      }
+      return endpoint;
+    }
     default: return 'https://api.openai.com/v1/chat/completions';
   }
 }

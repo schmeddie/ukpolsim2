@@ -283,7 +283,10 @@ function initGame() {
 
   if (!window.gameInitialized) {
     document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => showTab(btn.dataset.tab));
+      btn.addEventListener('click', () => {
+        showTab(btn.dataset.tab);
+        document.querySelector('.sidenav')?.classList.remove('open');
+      });
     });
 
     document.getElementById('btn-advance').addEventListener('click', advanceDay);
@@ -300,6 +303,10 @@ function initGame() {
     document.getElementById('mp-party-filter').addEventListener('change', e => { mpPartyFilter = e.target.value; mpPage = 0; loadMPs(); });
     document.getElementById('mp-region-filter').addEventListener('change', e => { mpRegionFilter = e.target.value; mpPage = 0; loadMPs(); });
     window.gameInitialized = true;
+
+    document.getElementById('btn-sidebar-toggle')?.addEventListener('click', () => {
+      document.querySelector('.sidenav').classList.toggle('open');
+    });
   }
 
   // Load game settings

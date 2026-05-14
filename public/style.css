@@ -243,6 +243,7 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 /* ── Game Layout ─────────────────────────────────────────────────────────── */
 #screen-game { display: none; height: 100vh; overflow: hidden; }
 #screen-game.active { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: 64px 1fr; }
+#screen-game.active { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: auto 1fr; }
 
 /* ── Topbar ──────────────────────────────────────────────────────────────── */
 .topbar {
@@ -765,6 +766,13 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 800px) {
+  .sidebar-toggle { display: block; }
+  #screen-game.active { display: flex; flex-direction: column; }
+  .content { flex: 1; overflow-y: auto; height: auto; }
+  .sidenav { position: fixed; top: 48px; left: -220px; height: calc(100vh - 48px); z-index: 1000; width: 200px; transition: left 0.3s; }
+  .sidenav.open { left: 0; }
+  .topbar-centre { position: static; transform: none; display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+  .topbar-daynum { font-size: 11px; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .widget-profile, .widget-parliament, .widget-news, .widget-upcoming { grid-column: 1; }
   .inbox-layout { grid-template-columns: 1fr; }
