@@ -422,7 +422,15 @@ function checkTriggers() {
     document.getElementById('event-title').textContent = trigger.title;
     document.getElementById('event-desc').textContent = trigger.description;
     document.getElementById('event-outcome').classList.add('hidden');
-    document.getElementById('event-action-area').classList.remove('hidden');
+    
+    if (trigger.event_type === 'vote') {
+      document.getElementById('event-action-area').classList.add('hidden');
+      document.getElementById('event-vote-area').classList.remove('hidden');
+    } else {
+      document.getElementById('event-action-area').classList.remove('hidden');
+      if (document.getElementById('event-vote-area')) document.getElementById('event-vote-area').classList.add('hidden');
+    }
+    
     document.getElementById('event-close').classList.add('hidden');
     document.getElementById('event-input').value = '';
     document.getElementById('event-modal').dataset.eventId = trigger.id;
@@ -430,12 +438,13 @@ function checkTriggers() {
   }
 }
 
-async function submitEventAction() {
+async function submitEventAction(manualAction) {
   const id = document.getElementById('event-modal').dataset.eventId;
-  const action = document.getElementById('event-input').value;
+  const action = manualAction || document.getElementById('event-input').value;
   if(!action) return;
   
   document.getElementById('event-action-area').classList.add('hidden');
+  if (document.getElementById('event-vote-area')) document.getElementById('event-vote-area').classList.add('hidden');
   document.getElementById('event-outcome').textContent = 'Generating outcome...';
   document.getElementById('event-outcome').classList.remove('hidden');
   

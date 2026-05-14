@@ -352,6 +352,11 @@
       <textarea id="event-input" rows="3" placeholder="What do you do?" style="width:100%;margin-bottom:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;"></textarea>
       <button class="btn-primary" onclick="submitEventAction()">Take Action</button>
     </div>
+    <div id="event-vote-area" class="hidden" style="display:flex;gap:10px;margin-bottom:12px;">
+      <button class="btn-primary" style="background:var(--green);flex:1;" onclick="submitEventAction('I vote Aye')">Vote Aye</button>
+      <button class="btn-primary" style="background:var(--red);flex:1;" onclick="submitEventAction('I vote No')">Vote No</button>
+      <button class="btn-primary" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);flex:1;" onclick="submitEventAction('I abstain from the vote')">Abstain</button>
+    </div>
     <div id="event-outcome" class="hidden" style="padding:12px;background:rgba(63,185,80,0.1);border-left:3px solid var(--green);margin-bottom:16px;font-size:14px;"></div>
     <button id="event-close" class="btn-primary hidden" onclick="closeEventModal()">Close & Continue</button>
   </div>

@@ -206,7 +206,7 @@ Return ONLY a valid JSON array. Each object must have:
 - "event_date": string (ISO date format, within 14 days of ${game_date})
 - "event_time": string (HH:MM format, realistic times between 08:00 and 20:00)
 - "title": string
-- "description": string (1-2 sentences)
+- "description": string (1-2 sentences. If event_type is "vote", MUST include the party whip's instruction, e.g. "Three-line whip to vote Aye.")
 - "event_type": one of "pmqs", "vote", "committee", "debate", "party", "constituency", "other"`;
 
   const content = await callAI([
@@ -234,7 +234,7 @@ async function generateDailyEvents(gameState, player, memories = []) {
   Return ONLY a valid JSON array. Each object must have:
   - "event_time": string (HH:MM format, realistic times between 08:00 and 20:00)
   - "title": string
-  - "description": string (1-2 sentences)
+  - "description": string (1-2 sentences. If event_type is "vote", MUST include the party whip's instruction, e.g. "The whip is to vote No.")
   - "event_type": one of "pmqs", "vote", "committee", "debate", "party", "constituency", "other"`;
   
   const content = await callAI([{ role: 'user', content: 'Generate today\'s events.' }], systemPrompt);
