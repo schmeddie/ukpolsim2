@@ -15,6 +15,9 @@ let mpRegionFilter = '';
 let mpSearchQuery = '';
 let allConstituencies = [];
 let dailyEvents = [];
+let calendarCurrentMonth = null;
+let calendarSelectedDate = null;
+let calendarEventsData = [];
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -494,7 +497,7 @@ function updateNewsTicker(news) {
 
 async function loadUpcomingEvents() {
   const events = await api('/api/calendar');
-  const upcoming = events.slice(0, 4);
+  const upcoming = events.filter(e => e.event_date >= gameState.game_date).slice(0, 4);
   if (!upcoming.length) {
     document.getElementById('upcoming-events').innerHTML = '<div style="color:var(--text3);font-size:13px">No upcoming events.</div>';
     return;
@@ -635,43 +638,122 @@ async function markAllRead() {
 // ── Calendar ───────────────────────────────────────────────────────────────
 
 async function loadCalendar() {
-  const events = await api('/api/calendar');
+  calendarEventsData = await api('/api/calendar');
   const container = document.getElementById('calendar-view');
 
-  if (!events.length) {
-    container.innerHTML = '<div style="color:var(--text3);padding:20px">No upcoming events.</div>';
-    return;
+  if (!calendarCurrentMonth && gameState) {
+    calendarCurrentMonth = new Date(gameState.game_date);
+    calendarCurrentMonth.setDate(1);
+  }
+  if (!calendarSelectedDate && gameState) {
+    calendarSelectedDate = gameState.game_date;
   }
 
-  // Group by month
-  const groups = {};
-  for (const e of events) {
-    const d = new Date(e.event_date + 'T00:00:00');
-    const key = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(e);
+  if (!calendarCurrentMonth) return;
+
+  container.innerHTML = `
+    <div class="calendar-layout">
+      <div class="calendar-main">
+        <div class="calendar-controls">
+          <button class="btn-sm" onclick="changeCalMonth(-1)">← Prev</button>
+          <h3 id="cal-month-label">Month Year</h3>
+          <button class="btn-sm" onclick="changeCalMonth(1)">Next →</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <div class="calendar-sidebar">
+        <h3 id="cal-sidebar-date" style="margin-bottom:12px;font-size:16px;">Selected Date</h3>
+        <div id="cal-sidebar-events"></div>
+      </div>
+    </div>
+  `;
+  renderCalendarGrid();
+  renderCalendarSidebar();
+}
+
+window.changeCalMonth = function(dir) {
+  calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() + dir);
+  renderCalendarGrid();
+}
+
+window.selectCalDate = function(dateStr) {
+  calendarSelectedDate = dateStr;
+  renderCalendarGrid();
+  renderCalendarSidebar();
+}
+
+function renderCalendarGrid() {
+  const year = calendarCurrentMonth.getFullYear();
+  const month = calendarCurrentMonth.getMonth();
+  document.getElementById('cal-month-label').textContent = calendarCurrentMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset === -1) startOffset = 6;
+
+  const daysInMonth = lastDay.getDate();
+
+  let gridHtml = '';
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (const d of daysOfWeek) {
+    gridHtml += `<div class="cal-header-day">${d}</div>`;
+  }
+
+  for (let i = 0; i < startOffset; i++) {
+    gridHtml += `<div class="cal-cell empty"></div>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const mStr = String(month + 1).padStart(2, '0');
+    const dStr = String(d).padStart(2, '0');
+    const dateStr = `${year}-${mStr}-${dStr}`;
+
+    const dayEvents = calendarEventsData.filter(e => e.event_date === dateStr);
+    const isToday = gameState && dateStr === gameState.game_date;
+    const isSelected = dateStr === calendarSelectedDate;
+
+    let dotsHtml = dayEvents.map(e => `<div class="cal-dot cal-type-${e.event_type}"></div>`).join('');
+
+    gridHtml += `
+      <div class="cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'active' : ''}" onclick="selectCalDate('${dateStr}')">
+        <div class="cal-day-num">${d}</div>
+        <div class="cal-dots">${dotsHtml}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById('cal-grid').innerHTML = gridHtml;
+}
+
+function renderCalendarSidebar() {
+  const dayEvents = calendarEventsData.filter(e => e.event_date === calendarSelectedDate);
+  dayEvents.sort((a, b) => (a.event_time || '00:00').localeCompare(b.event_time || '00:00'));
+
+  const d = new Date(calendarSelectedDate + 'T00:00:00');
+  document.getElementById('cal-sidebar-date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const container = document.getElementById('cal-sidebar-events');
+  if (!dayEvents.length) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:13px">No events scheduled.</div>';
+    return;
   }
 
   const typeIcons = { pmqs: '🎙️', vote: '🗳️', committee: '📋', debate: '💬', party: '🎪', constituency: '🏘️', parliament: '🏛️', other: '📌' };
 
-  container.innerHTML = Object.entries(groups).map(([month, evs]) => `
-    <div class="calendar-group">
-      <div class="calendar-month-header">${month}</div>
-      ${evs.map(e => {
-        const d = new Date(e.event_date + 'T00:00:00');
-        return `<div class="calendar-event cal-type-${e.event_type}">
-          <div class="cal-date">
-            <div class="cal-day">${d.getDate()}</div>
-            <div class="cal-month">${d.toLocaleDateString('en-GB', { month: 'short' })}</div>
-          </div>
-          <div class="cal-info">
-            <div class="cal-title">${typeIcons[e.event_type] || '📌'} ${escHtml(e.title)}</div>
-            <div class="cal-desc">${escHtml(e.description)}</div>
-          </div>
-          <div class="cal-tag">${e.event_type}</div>
-        </div>`;
-      }).join('')}
-    </div>`).join('');
+  container.innerHTML = dayEvents.map(e => `
+    <div class="calendar-event cal-type-${e.event_type}" style="flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+        <div class="cal-tag">${e.event_time || '12:00'}</div>
+        <div class="cal-tag">${e.event_type}</div>
+      </div>
+      <div class="cal-info" style="width:100%">
+        <div class="cal-title">${typeIcons[e.event_type] || '📌'} ${escHtml(e.title)}</div>
+        <div class="cal-desc">${escHtml(e.description)}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ── Parliament ──────────────────────────────────────────────────────────────

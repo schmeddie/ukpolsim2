@@ -184,6 +184,7 @@ Generate 3-5 upcoming parliamentary events for the next 2 weeks. Include a mix o
 
 Return ONLY a valid JSON array. Each object must have:
 - "event_date": string (ISO date format, within 14 days of ${game_date})
+- "event_time": string (HH:MM format, realistic times between 08:00 and 20:00)
 - "title": string
 - "description": string (1-2 sentences)
 - "event_type": one of "pmqs", "vote", "committee", "debate", "party", "constituency", "other"`;

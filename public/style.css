@@ -545,15 +545,64 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .player-email-body { background:var(--bg3); border-left:3px solid var(--accent); padding:12px; margin-top:10px; border-radius:4px; font-style:italic; }
 
 /* ── Calendar ────────────────────────────────────────────────────────────── */
-.calendar-group { margin-bottom: 24px; }
-.calendar-month-header {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: var(--text2);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
+.calendar-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
 }
+.calendar-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.cal-header-day {
+  text-align: center;
+  font-weight: 700;
+  color: var(--text2);
+  font-size: 12px;
+  padding-bottom: 8px;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.cal-cell.empty { background: transparent; border: none; cursor: default; }
+.cal-cell:not(.empty):hover { border-color: var(--accent); }
+.cal-cell.active { border-color: var(--accent); background: rgba(31,111,235,0.08); }
+.cal-cell.today { border-bottom: 3px solid var(--green); }
+.cal-day-num { font-size: 14px; font-weight: 600; color: var(--text); }
+.cal-cell.empty .cal-day-num { display: none; }
+.cal-dots { display: flex; gap: 3px; flex-wrap: wrap; margin-top: auto; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; }
+.cal-dot.cal-type-pmqs { background: var(--yellow); }
+.cal-dot.cal-type-vote { background: var(--red); }
+.cal-dot.cal-type-committee { background: var(--purple); }
+.cal-dot.cal-type-debate { background: var(--accent); }
+.cal-dot.cal-type-party { background: var(--labour); }
+.cal-dot.cal-type-constituency { background: var(--green); }
+.cal-dot.cal-type-other { background: var(--text3); }
+.cal-dot.cal-type-parliament { background: var(--accent); }
+.calendar-sidebar {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  height: fit-content;
+}
+
 .calendar-event {
   display: flex;
   align-items: flex-start;
@@ -782,4 +831,5 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
   .inbox-layout { grid-template-columns: 1fr; }
   .email-list { border-right: none; border-bottom: 1px solid var(--border); height: 200px; }
   .form-row { grid-template-columns: 1fr; }
+  .calendar-layout { grid-template-columns: 1fr; }
 }

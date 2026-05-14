@@ -141,20 +141,20 @@ app.post('/api/game/new', wrap((req, res) => {
 function seedInitialCalendar(db, startDate) {
   const d = new Date(startDate);
   const events = [
-    { offset: 1,  title: 'New Parliament Assembles',  description: 'MPs gather in the House of Commons for the first time after the election. The Speaker is elected and oaths are taken.',                                            type: 'parliament'   },
-    { offset: 3,  title: 'State Opening of Parliament', description: 'His Majesty the King delivers the King\'s Speech, outlining the new government\'s legislative programme.',                                                     type: 'parliament'   },
-    { offset: 7,  title: 'First PMQs',                 description: 'Prime Minister\'s Questions — the new PM faces the Commons for the first time.',                                                                                 type: 'pmqs'         },
-    { offset: 10, title: 'Constituency Surgery',       description: 'Your first surgery session. Constituents queue up with planning complaints, benefits issues, and one man\'s grievance about a missing wheelie bin.',              type: 'constituency' },
-    { offset: 14, title: 'Emergency Budget Debate',    description: 'The Chancellor presents an emergency fiscal statement responding to the economic situation inherited from the previous government.',                              type: 'debate'       },
-    { offset: 21, title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
-    { offset: 28, title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
+    { offset: 1,  time: '09:00', title: 'New Parliament Assembles',  description: 'MPs gather in the House of Commons for the first time after the election. The Speaker is elected and oaths are taken.',                                            type: 'parliament'   },
+    { offset: 3,  time: '11:00', title: 'State Opening of Parliament', description: 'His Majesty the King delivers the King\'s Speech, outlining the new government\'s legislative programme.',                                                     type: 'parliament'   },
+    { offset: 7,  time: '12:00', title: 'First PMQs',                 description: 'Prime Minister\'s Questions — the new PM faces the Commons for the first time.',                                                                                 type: 'pmqs'         },
+    { offset: 10, time: '14:00', title: 'Constituency Surgery',       description: 'Your first surgery session. Constituents queue up with planning complaints, benefits issues, and one man\'s grievance about a missing wheelie bin.',              type: 'constituency' },
+    { offset: 14, time: '15:30', title: 'Emergency Budget Debate',    description: 'The Chancellor presents an emergency fiscal statement responding to the economic situation inherited from the previous government.',                              type: 'debate'       },
+    { offset: 21, time: '12:00', title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
+    { offset: 28, time: '12:00', title: 'PMQs',                       description: 'Weekly Prime Minister\'s Questions.',                                                                                                                            type: 'pmqs'         },
   ];
   const insert = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
-                             VALUES (?, '12:00', ?, ?, ?, 0, 'pending')`);
+                             VALUES (?, ?, ?, ?, ?, 0, 'pending')`);
   for (const e of events) {
     const date = new Date(d);
     date.setUTCDate(date.getUTCDate() + e.offset);
-    insert.run([date.toISOString().split('T')[0], e.title, e.description, e.type]);
+    insert.run([date.toISOString().split('T')[0], e.time, e.title, e.description, e.type]);
   }
 }
 
@@ -211,9 +211,9 @@ app.post('/api/game/advance', async (req, res, next) => {
       try {
         const events = await generateCalendarEvents(newState, player);
         const insertEvent = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
-                                        VALUES (?, '12:00', ?, ?, ?, 1, 'pending')`);
+                                        VALUES (?, ?, ?, ?, ?, 1, 'pending')`);
         for (const e of events) {
-          insertEvent.run([e.event_date, e.title, e.description, e.event_type]);
+          insertEvent.run([e.event_date, e.event_time || '12:00', e.title, e.description, e.event_type]);
         }
         results.events = true;
       } catch (err) {
@@ -359,8 +359,8 @@ app.get('/api/calendar', wrap((req, res) => {
   const db = getDb();
   const state = db.prepare('SELECT game_date FROM game_state WHERE id = 1').get();
   if (!state) return res.json([]);
-  const events = db.prepare(`SELECT * FROM calendar_events WHERE event_date >= ?
-                              ORDER BY event_date ASC LIMIT 60`)
+  const events = db.prepare(`SELECT * FROM calendar_events WHERE event_date >= date(?, '-1 month')
+                              ORDER BY event_date ASC, event_time ASC LIMIT 300`)
     .all([state.game_date]);
   res.json(events);
 }));
