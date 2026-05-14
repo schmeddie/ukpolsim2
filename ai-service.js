@@ -100,7 +100,7 @@ function getDefaultModel(provider) {
 async function generateEmails(gameState, player, recentEvents, memories = []) {
   const { game_date, scenario_name, pm_name, pm_party } = gameState;
   
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
   const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
 
   const systemPrompt = `You are a creative writer for a UK political simulation game. Generate realistic, entertaining emails that an MP would receive.
@@ -144,7 +144,7 @@ Make the tone vary: some urgent, some mundane, some amusing. Reference real UK p
 
 async function generateNews(gameState, player) {
   const { game_date, scenario_name, pm_name, pm_party } = gameState;
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
 
   const systemPrompt = `You are generating UK political news headlines for a simulation game.
 
@@ -183,7 +183,7 @@ Return ONLY a valid JSON array. Each object must have:
 async function generateCalendarEvents(gameState, player, memories = []) {
   const { game_date, scenario_name } = gameState;
   const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
 
   const systemPrompt = `You are generating parliamentary calendar events for a UK political simulation game.
 
@@ -222,7 +222,7 @@ Return ONLY a valid JSON array. Each object must have:
 async function generateDailyEvents(gameState, player, memories = []) {
   const { game_date, scenario_name } = gameState;
   const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
   const systemPrompt = `You are generating a daily event schedule for a UK political simulation game.
   Date: ${game_date}
   Player: ${player.name}, ${player.party} MP for ${player.constituency}
@@ -243,7 +243,7 @@ async function generateDailyEvents(gameState, player, memories = []) {
 }
 
 async function resolveEventAction(gameState, player, event, action) {
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
   const systemPrompt = `You are the game master for a UK political simulator.
   Player: ${player.name}, ${player.party} MP for ${player.constituency}.
   Approval Rating: ${player.approval_rating}% | Party Standing: ${player.party_standing}%
@@ -313,7 +313,7 @@ async function generateMpProfile(gameState, mp) {
 
 function getSampleContext(gameState, player, recentEvents, memories) {
   const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
-  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : ''].filter(Boolean).join(', ') || 'None';
+  const staffString = [player.staff_pr ? 'PR Manager' : '', player.staff_caseworker ? 'Caseworker' : '', player.staff_researcher ? 'Parliamentary Researcher' : '', player.staff_chief ? 'Chief of Staff' : ''].filter(Boolean).join(', ') || 'None';
   return `GAME STATE:
 - Date: ${gameState.game_date}
 - Scenario: ${gameState.scenario_name}

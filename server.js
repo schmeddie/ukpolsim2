@@ -258,7 +258,10 @@ app.post('/api/game/advance', async (req, res, next) => {
             }
           }
           if (mech.player_approval_change) {
-            const newApp = Math.max(0, Math.min(100, player.approval_rating + mech.player_approval_change));
+            let change = mech.player_approval_change;
+            if (change < 0 && player.staff_pr) change = Math.ceil(change / 2);
+            if (change > 0 && player.staff_chief) change += 1;
+            const newApp = Math.max(0, Math.min(100, player.approval_rating + change));
             db.prepare('UPDATE player SET approval_rating = ? WHERE id = ?').run([newApp, player.id]);
           }
           processRelationshipChanges(db, mech.mp_relationship_changes);
@@ -296,6 +299,23 @@ app.post('/api/game/advance', async (req, res, next) => {
       results.errors.push(`Daily Schedule: ${err.message}`);
     }
 
+    // Weekly staff buffs
+    if (newDay % 7 === 0 && (player.staff_caseworker || player.staff_researcher)) {
+      const currentPlayer = db.prepare('SELECT * FROM player WHERE id = ?').get([player.id]);
+      let weeklyAppChange = player.staff_caseworker ? 2 : 0;
+      let weeklyPartyChange = player.staff_researcher ? 2 : 0;
+      
+      const updatedApp = Math.max(0, Math.min(100, currentPlayer.approval_rating + weeklyAppChange));
+      const updatedParty = Math.max(0, Math.min(100, currentPlayer.party_standing + weeklyPartyChange));
+      db.prepare('UPDATE player SET approval_rating = ?, party_standing = ? WHERE id = ?').run([updatedApp, updatedParty, player.id]);
+      
+      let reportBody = "Good morning,\n\nJust a quick weekly update from your staff.\n\n";
+      if (player.staff_caseworker) reportBody += "- Your Constituency Caseworker resolved a backlog of local complaints (+2 Approval Rating).\n";
+      if (player.staff_researcher) reportBody += "- Your Researcher's excellent briefing notes have impressed the whips (+2 Party Standing).\n";
+      
+      db.prepare(`INSERT INTO emails (game_date, delivery_time, sender_name, sender_email, subject, body, email_type, read, is_player) VALUES (?, '08:30', 'Office Manager', 'office@parliament.uk', 'Weekly Staff Report', ?, 'party', 0, 0)`).run([newDate, reportBody]);
+    }
+
     res.json({ ok: true, new_date: newDate, day: newDay, ...results });
   } catch (err) {
     next(err);
@@ -323,8 +343,16 @@ app.post('/api/game/event/:id/resolve', wrap(async (req, res) => {
   
   const result = await resolveEventAction(state, player, event, action);
   
-  const newApproval = Math.max(0, Math.min(100, player.approval_rating + (result.approval_change || 0)));
-  const newParty = Math.max(0, Math.min(100, player.party_standing + (result.party_change || 0)));
+  let appChange = result.approval_change || 0;
+  let partyChange = result.party_change || 0;
+  if (appChange < 0 && player.staff_pr) appChange = Math.ceil(appChange / 2);
+  if (appChange > 0 && player.staff_chief) appChange += 1;
+  if (partyChange > 0 && player.staff_chief) partyChange += 1;
+  result.approval_change = appChange;
+  result.party_change = partyChange;
+  
+  const newApproval = Math.max(0, Math.min(100, player.approval_rating + appChange));
+  const newParty = Math.max(0, Math.min(100, player.party_standing + partyChange));
   
   db.prepare('UPDATE player SET approval_rating = ?, party_standing = ? WHERE id = ?').run([newApproval, newParty, player.id]);
   if (result.memory_note) {
@@ -349,7 +377,8 @@ app.post('/api/office/staff', wrap((req, res) => {
   const staffList = [
     { id: 'staff_pr', cost: 40000 },
     { id: 'staff_caseworker', cost: 30000 },
-    { id: 'staff_researcher', cost: 35000 }
+    { id: 'staff_researcher', cost: 35000 },
+    { id: 'staff_chief', cost: 50000 }
   ];
   
   if (!staffList.find(s => s.id === role)) return res.status(400).json({error: 'Invalid role'});
@@ -465,8 +494,14 @@ app.post('/api/emails/:id/reply', wrap(async (req, res) => {
     
   const aiReply = await generateEmailReply(state, player, original, reply);
   
-  const newApproval = Math.max(0, Math.min(100, player.approval_rating + (aiReply.approval_change || 0)));
-  const newParty = Math.max(0, Math.min(100, player.party_standing + (aiReply.party_change || 0)));
+  let appChange = aiReply.approval_change || 0;
+  let partyChange = aiReply.party_change || 0;
+  if (appChange < 0 && player.staff_pr) appChange = Math.ceil(appChange / 2);
+  if (appChange > 0 && player.staff_chief) appChange += 1;
+  if (partyChange > 0 && player.staff_chief) partyChange += 1;
+
+  const newApproval = Math.max(0, Math.min(100, player.approval_rating + appChange));
+  const newParty = Math.max(0, Math.min(100, player.party_standing + partyChange));
   db.prepare('UPDATE player SET approval_rating = ?, party_standing = ? WHERE id = ?').run([newApproval, newParty, player.id]);
   if (aiReply.memory_note) {
     db.prepare('INSERT INTO player_memories (game_date, memory_text) VALUES (?, ?)').run([state.game_date, aiReply.memory_note]);

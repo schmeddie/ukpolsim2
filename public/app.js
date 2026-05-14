@@ -928,9 +928,7 @@ async function loadGovernment() {
 async function loadOffice() {
   const p = await api('/api/character');
   const staff = [
-    { id: 'staff_pr', name: 'PR Manager', cost: 40000, desc: 'Handles media relations and helps spin public scandals to protect your Approval Rating.', active: p.staff_pr },
-    { id: 'staff_caseworker', name: 'Constituency Caseworker', cost: 30000, desc: 'Manages the inbox, handles constituent complaints, and keeps the locals happy.', active: p.staff_caseworker },
-    { id: 'staff_researcher', name: 'Parliamentary Researcher', cost: 35000, desc: 'Writes speeches, briefs you on upcoming bills, and manages parliamentary tactics.', active: p.staff_researcher }
+    { id: 'staff_pr', name: 'PR Manager', cost: 40000, desc: 'Handles media relationsinster operative. Automatically adds +1 to all positive stat changes from events and emails.', active: p.staff_chief }
   ];
   
   const totalBudget = 150000;

@@ -46,6 +46,7 @@ function initSchema() {
       staff_pr INTEGER NOT NULL DEFAULT 0,
       staff_caseworker INTEGER NOT NULL DEFAULT 0,
       staff_researcher INTEGER NOT NULL DEFAULT 0,
+      staff_chief INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -140,6 +141,7 @@ function initSchema() {
   try { db.exec("ALTER TABLE player ADD COLUMN staff_pr INTEGER NOT NULL DEFAULT 0"); } catch(e){}
   try { db.exec("ALTER TABLE player ADD COLUMN staff_caseworker INTEGER NOT NULL DEFAULT 0"); } catch(e){}
   try { db.exec("ALTER TABLE player ADD COLUMN staff_researcher INTEGER NOT NULL DEFAULT 0"); } catch(e){}
+  try { db.exec("ALTER TABLE player ADD COLUMN staff_chief INTEGER NOT NULL DEFAULT 0"); } catch(e){}
 }
 
 function getSetting(key) {
