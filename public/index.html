@@ -255,12 +255,6 @@
         </table>
         <div id="mp-pagination" class="pagination"></div>
       </div>
-      <div id="mp-modal" class="modal hidden">
-        <div class="modal-content">
-          <button class="modal-close" onclick="closeMpModal()">✕</button>
-          <div id="mp-modal-body"></div>
-        </div>
-      </div>
     </div>
 
     <!-- Settings (in-game) -->
@@ -304,6 +298,22 @@
 
 <!-- Toast -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- MP Modal -->
+<div id="mp-modal" class="modal hidden" style="z-index: 1002;">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeMpModal()">✕</button>
+    <div id="mp-modal-body"></div>
+  </div>
+</div>
+
+<!-- News Modal -->
+<div id="news-modal" class="modal hidden" style="z-index: 1001;">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeNewsModal()">✕</button>
+    <div id="news-modal-body"></div>
+  </div>
+</div>
 
 <!-- Event Modal -->
 <div id="event-modal" class="modal hidden">

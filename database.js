@@ -117,6 +117,8 @@ function initSchema() {
   try { db.exec("ALTER TABLE emails ADD COLUMN delivery_time TEXT DEFAULT '07:00'"); } catch(e){}
   try { db.exec("ALTER TABLE emails ADD COLUMN thread_id INTEGER"); } catch(e){}
   try { db.exec("ALTER TABLE emails ADD COLUMN is_player INTEGER NOT NULL DEFAULT 0"); } catch(e){}
+  try { db.exec("ALTER TABLE news_items ADD COLUMN body TEXT"); } catch(e){}
+  try { db.exec("ALTER TABLE mps ADD COLUMN profile_text TEXT"); } catch(e){}
 }
 
 function getSetting(key) {

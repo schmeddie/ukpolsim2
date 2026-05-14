@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { getDb, getSetting, setSetting, getAllSettings } = require('./database');
-const { generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply } = require('./ai-service');
+const { generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile } = require('./ai-service');
 const { generateMPs, generatePMName, SCENARIOS, CONSTITUENCIES } = require('./mp-generator');
 
 const app = express();
@@ -292,6 +292,25 @@ app.get('/api/mps', wrap((req, res) => {
   res.json({ mps, total });
 }));
 
+app.get('/api/mps/names', wrap((req, res) => {
+  const db = getDb();
+  res.json(db.prepare('SELECT id, name FROM mps').all());
+}));
+
+app.get('/api/mps/:id', wrap((req, res) => {
+  const db = getDb();
+  res.json(db.prepare('SELECT * FROM mps WHERE id = ?').get([req.params.id]));
+}));
+
+app.post('/api/mps/:id/generate-profile', wrap(async (req, res) => {
+  const db = getDb();
+  const mp = db.prepare('SELECT * FROM mps WHERE id = ?').get([req.params.id]);
+  const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
+  const result = await generateMpProfile(state, mp);
+  db.prepare('UPDATE mps SET profile_text = ? WHERE id = ?').run([result.profile, mp.id]);
+  res.json({ profile_text: result.profile });
+}));
+
 app.get('/api/parliament/summary', wrap((req, res) => {
   const db = getDb();
   const rows = db.prepare('SELECT party, COUNT(*) as seats FROM mps GROUP BY party ORDER BY seats DESC').all();
@@ -370,6 +389,21 @@ app.get('/api/calendar', wrap((req, res) => {
 app.get('/api/news', wrap((req, res) => {
   const db = getDb();
   res.json(db.prepare('SELECT * FROM news_items ORDER BY id DESC LIMIT 20').all());
+}));
+
+app.get('/api/news/:id', wrap((req, res) => {
+  const db = getDb();
+  res.json(db.prepare('SELECT * FROM news_items WHERE id = ?').get([req.params.id]));
+}));
+
+app.post('/api/news/:id/generate-body', wrap(async (req, res) => {
+  const db = getDb();
+  const news = db.prepare('SELECT * FROM news_items WHERE id = ?').get([req.params.id]);
+  const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
+  const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
+  const result = await generateNewsArticle(state, news, player);
+  db.prepare('UPDATE news_items SET body = ? WHERE id = ?').run([result.body, news.id]);
+  res.json({ body: result.body });
 }));
 
 // ─── Backstory options ────────────────────────────────────────────────────────

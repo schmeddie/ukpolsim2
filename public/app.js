@@ -96,6 +96,29 @@ function formatShortDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+let allMpNames = [];
+let mpRegex = null;
+let mpNameToId = {};
+
+async function loadMpNames() {
+  try {
+    allMpNames = await api('/api/mps/names');
+    const names = allMpNames.map(m => m.name).sort((a,b) => b.length - a.length);
+    const escapedNames = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    mpRegex = new RegExp('\\b(' + escapedNames.join('|') + ')\\b', 'g');
+    allMpNames.forEach(m => mpNameToId[m.name] = m.id);
+  } catch(e) {}
+}
+
+function enrichTextWithMpLinks(text) {
+  if (!text) return '';
+  let escaped = escHtml(text);
+  if (!mpRegex) return escaped;
+  return escaped.replace(mpRegex, (match) => {
+    return `<span class="mp-link" onclick="showMpModal(${mpNameToId[match]})">${match}</span>`;
+  });
+}
+
 async function fetchGameState() {
   const oldDate = gameState?.game_date;
   const oldTime = gameState?.game_time;
@@ -293,6 +316,7 @@ document.getElementById('btn-start-game').addEventListener('click', async () => 
 function initGame() {
   updateTopbar();
   showScreen('screen-game');
+  loadMpNames();
   fetchDailyEvents();
   startClock();
   showTab('dashboard');
@@ -402,7 +426,7 @@ async function submitEventAction() {
   document.getElementById('event-outcome').classList.remove('hidden');
   
   const res = await api(`/api/game/event/${id}/resolve`, 'POST', { action });
-  document.getElementById('event-outcome').textContent = res.outcome;
+  document.getElementById('event-outcome').innerHTML = enrichTextWithMpLinks(res.outcome);
   document.getElementById('event-close').classList.remove('hidden');
   
   const ev = dailyEvents.find(e => e.id == id);
@@ -481,7 +505,7 @@ async function loadDashboardNews() {
     return;
   }
   document.getElementById('news-list').innerHTML = news.slice(0, 5).map(n => `
-    <div class="news-item">
+    <div class="news-item" onclick="openNews(${n.id})">
       <div class="news-headline">${escHtml(n.headline)}</div>
       <div class="news-meta"><span class="cat cat-${n.category}">${n.category}</span> ${escHtml(n.source)}</div>
     </div>`).join('');
@@ -491,9 +515,39 @@ async function loadDashboardNews() {
 function updateNewsTicker(news) {
   const ticker = document.getElementById('news-ticker');
   if (!news.length) { ticker.innerHTML = ''; return; }
-  const items = news.map(n => `<span class="ticker-item"><strong>${escHtml(n.source)}:</strong> ${escHtml(n.headline)}</span>`).join('');
+  const items = news.map(n => `<span class="ticker-item" style="cursor:pointer" onclick="openNews(${n.id})"><strong>${escHtml(n.source)}:</strong> ${escHtml(n.headline)}</span>`).join('');
   ticker.innerHTML = `<div class="ticker-inner">${items}${items}</div>`;
 }
+
+async function openNews(id) {
+  const modal = document.getElementById('news-modal');
+  const body = document.getElementById('news-modal-body');
+  modal.classList.remove('hidden');
+  body.innerHTML = '<div style="padding:20px;text-align:center;"><div class="spinner-sm" style="margin:0 auto"></div></div>';
+  
+  try {
+    const news = await api(`/api/news/${id}`);
+    body.innerHTML = `
+      <div class="news-view-header">
+        <div class="news-view-headline">${escHtml(news.headline)}</div>
+        <div class="news-view-meta">
+          <span class="cat cat-${news.category}">${news.category}</span>
+          <span>${escHtml(news.source)}</span>
+          <span>${formatDate(news.game_date)}</span>
+        </div>
+      </div>
+      <div id="news-article-area" class="news-view-body">
+        ${news.body ? enrichTextWithMpLinks(news.body) : '<div class="spinner-sm" style="margin: 0 auto"></div><div style="text-align:center;margin-top:8px;color:var(--text3)">Writing article...</div>'}
+      </div>
+    `;
+    if (!news.body) {
+      const res = await api(`/api/news/${id}/generate-body`, 'POST');
+      document.getElementById('news-article-area').innerHTML = enrichTextWithMpLinks(res.body);
+    }
+  } catch (err) { body.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load article</div>`; }
+}
+
+function closeNewsModal() { document.getElementById('news-modal').classList.add('hidden'); }
 
 async function loadUpcomingEvents() {
   const events = await api('/api/calendar');
@@ -597,7 +651,7 @@ async function openEmail(id) {
         <span class="email-type-badge type-${email.email_type}">${typeLabels[email.email_type] || email.email_type}</span>
       </div>
     </div>
-    <div class="email-view-body ${email.is_player ? 'player-email-body' : ''}">${escHtml(email.body)}</div>
+    <div class="email-view-body ${email.is_player ? 'player-email-body' : ''}">${enrichTextWithMpLinks(email.body)}</div>
     ${email.is_player ? '' : `
     <div class="email-reply-area">
       <textarea id="email-reply-input" placeholder="Write a reply..."></textarea>
@@ -848,32 +902,37 @@ function changeMpPage(page) {
   loadMPs();
 }
 
-function showMpModal(id) {
-  const row = document.querySelector(`#mp-tbody tr[data-mp]`);
-  // Find by iterating
-  const rows = document.querySelectorAll('#mp-tbody tr[data-mp]');
-  let mp = null;
-  rows.forEach(r => { const d = JSON.parse(r.dataset.mp); if (d.id === id) mp = d; });
-  if (!mp) return;
-
+async function showMpModal(id) {
   const modal = document.getElementById('mp-modal');
-  document.getElementById('mp-modal-body').innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <div class="profile-avatar" style="background:${partyColor(mp.party)};width:48px;height:48px;font-size:18px">
-        ${mp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-      </div>
-      <div>
-        <div class="modal-mp-name">${escHtml(mp.name)}</div>
-        <div class="modal-mp-meta">
-          <span class="party-badge" style="background:${partyColor(mp.party)};color:${mp.party === 'SNP' ? '#000' : '#fff'}">${mp.party}</span>
-          &nbsp;${mp.role} · Age ${mp.age}
+  const body = document.getElementById('mp-modal-body');
+  modal.classList.remove('hidden');
+  body.innerHTML = '<div style="padding:20px;text-align:center;"><div class="spinner-sm" style="margin:0 auto"></div></div>';
+
+  try {
+    const mp = await api(`/api/mps/${id}`);
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="profile-avatar" style="background:${partyColor(mp.party)};width:48px;height:48px;font-size:18px">
+          ${mp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+        </div>
+        <div>
+          <div class="modal-mp-name">${escHtml(mp.name)}</div>
+          <div class="modal-mp-meta">
+            <span class="party-badge" style="background:${partyColor(mp.party)};color:${mp.party === 'SNP' ? '#000' : '#fff'}">${mp.party}</span>
+            &nbsp;${mp.role} · Age ${mp.age}
+          </div>
         </div>
       </div>
-    </div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">📍 ${escHtml(mp.constituency)} (${escHtml(mp.region)})</div>
-    <div class="modal-mp-backstory">${escHtml(mp.backstory)}</div>
-  `;
-  modal.classList.remove('hidden');
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">📍 ${escHtml(mp.constituency)} (${escHtml(mp.region)})</div>
+      <div id="mp-profile-area" class="modal-mp-backstory">
+        ${mp.profile_text ? enrichTextWithMpLinks(mp.profile_text) : '<div class="spinner-sm" style="margin: 0 auto"></div><div style="text-align:center;margin-top:8px;color:var(--text3)">Researching profile...</div>'}
+      </div>
+    `;
+    if (!mp.profile_text) {
+      const res = await api(`/api/mps/${id}/generate-profile`, 'POST');
+      document.getElementById('mp-profile-area').innerHTML = enrichTextWithMpLinks(res.profile_text);
+    }
+  } catch (err) { body.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load MP</div>`; }
 }
 
 function closeMpModal() {
@@ -882,6 +941,9 @@ function closeMpModal() {
 
 document.getElementById('mp-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('mp-modal')) closeMpModal();
+});
+document.getElementById('news-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('news-modal')) closeNewsModal();
 });
 
 // ── Game Settings ──────────────────────────────────────────────────────────

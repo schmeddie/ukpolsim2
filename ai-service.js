@@ -243,4 +243,35 @@ async function generateEmailReply(gameState, player, originalEmail, playerReply)
   return JSON.parse(jsonMatch[0]);
 }
 
-module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply };
+async function generateNewsArticle(gameState, newsItem, player) {
+  const systemPrompt = `You are a journalist for ${newsItem.source} in a UK political simulation game.
+  Date: ${gameState.game_date}
+  Prime Minister: ${gameState.pm_name} (${gameState.pm_party})
+  Player MP: ${player.name} (${player.party})
+  
+  Expand the following into a realistic 3-4 paragraph news article:
+  Headline: "${newsItem.headline}"
+  Summary: "${newsItem.summary}"
+  
+  Return ONLY a valid JSON object with the key "body" containing the article text. Include realistic quotes from relevant politicians.`;
+  
+  const content = await callAI([{ role: 'user', content: 'Write the full article.' }], systemPrompt);
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch[0]);
+}
+
+async function generateMpProfile(gameState, mp) {
+  const systemPrompt = `You are writing a biographical profile for a UK political simulation game.
+  MP: ${mp.name}, ${mp.party} MP for ${mp.constituency}
+  Age: ${mp.age}, Role: ${mp.role}
+  Basic Backstory: "${mp.backstory}"
+  
+  Expand this into a full, detailed biographical profile (2-3 paragraphs). Discuss their early life, career before politics, and political reputation. 
+  Return ONLY a valid JSON object with the key "profile" containing the text.`;
+  
+  const content = await callAI([{ role: 'user', content: 'Write the profile.' }], systemPrompt);
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch[0]);
+}
+
+module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile };
