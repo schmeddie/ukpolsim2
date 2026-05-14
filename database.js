@@ -41,6 +41,8 @@ function initSchema() {
       backstory_id TEXT NOT NULL,
       backstory_text TEXT NOT NULL,
       bio TEXT,
+      approval_rating INTEGER NOT NULL DEFAULT 50,
+      party_standing INTEGER NOT NULL DEFAULT 50,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -107,6 +109,12 @@ function initSchema() {
       source TEXT NOT NULL,
       category TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS player_memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_date TEXT NOT NULL,
+      memory_text TEXT NOT NULL
+    );
   `);
 
   // Auto-migrate schema for new features on existing databases
@@ -119,6 +127,8 @@ function initSchema() {
   try { db.exec("ALTER TABLE emails ADD COLUMN is_player INTEGER NOT NULL DEFAULT 0"); } catch(e){}
   try { db.exec("ALTER TABLE news_items ADD COLUMN body TEXT"); } catch(e){}
   try { db.exec("ALTER TABLE mps ADD COLUMN profile_text TEXT"); } catch(e){}
+  try { db.exec("ALTER TABLE player ADD COLUMN approval_rating INTEGER NOT NULL DEFAULT 50"); } catch(e){}
+  try { db.exec("ALTER TABLE player ADD COLUMN party_standing INTEGER NOT NULL DEFAULT 50"); } catch(e){}
 }
 
 function getSetting(key) {

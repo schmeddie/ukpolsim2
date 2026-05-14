@@ -129,6 +129,9 @@
       <span id="tb-date" class="topbar-date">—</span>
       <span id="tb-time" class="topbar-date" style="margin-left:8px;color:var(--accent)">07:00</span>
       <span id="tb-day" class="topbar-daynum">Day 1</span>
+      <span id="tb-stats" style="margin-left:12px;font-size:12px;color:var(--text2)">
+        Approval: <span id="tb-approval">50</span>% | Party: <span id="tb-party">50</span>%
+      </span>
     </div>
     <div class="topbar-right">
       <span id="tb-player" class="topbar-player">—</span>
@@ -281,6 +284,12 @@
         <div class="form-group" id="gs-endpoint-group">
           <label>Custom Endpoint URL</label>
           <input type="text" id="gs-endpoint">
+        </div>
+        <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border)">
+          <label>Memory Context Limit (Past Events)</label>
+          <input type="number" id="gs-memory-limit" value="10" min="0" max="50">
+          <button class="btn-sm" style="margin-top:8px" onclick="checkContext()">Check Current Context & Tokens</button>
+          <div id="context-debug" class="hidden" style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--bg3);padding:10px;border-radius:6px;max-height:200px;overflow-y:auto;white-space:pre-wrap;"></div>
         </div>
         <button class="btn-primary" id="btn-save-gs">Save Settings</button>
         <div id="gs-saved" class="save-notice hidden">✓ Saved</div>

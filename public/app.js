@@ -426,8 +426,13 @@ async function submitEventAction() {
   document.getElementById('event-outcome').classList.remove('hidden');
   
   const res = await api(`/api/game/event/${id}/resolve`, 'POST', { action });
-  document.getElementById('event-outcome').innerHTML = enrichTextWithMpLinks(res.outcome);
+  const appText = res.approval_change > 0 ? `+${res.approval_change}` : res.approval_change;
+  const partyText = res.party_change > 0 ? `+${res.party_change}` : res.party_change;
+  document.getElementById('event-outcome').innerHTML = `${enrichTextWithMpLinks(res.outcome)}<br><br><span style="font-weight:600;font-size:12px;color:var(--text2)">Stat Changes: Approval ${appText} | Party ${partyText}</span>`;
   document.getElementById('event-close').classList.remove('hidden');
+  
+  player = await api('/api/character');
+  updateTopbar();
   
   const ev = dailyEvents.find(e => e.id == id);
   if (ev) ev.status = 'resolved';
@@ -442,6 +447,8 @@ function updateTopbar() {
   document.getElementById('tb-day').textContent = `Day ${gameState.day_number}`;
   if (player) {
     document.getElementById('tb-player').textContent = player.name;
+    document.getElementById('tb-approval').textContent = player.approval_rating;
+    document.getElementById('tb-party').textContent = player.party_standing;
     const badge = document.getElementById('tb-party-badge');
     badge.textContent = player.party;
     badge.style.background = partyColor(player.party);
@@ -471,6 +478,7 @@ function renderProfileCard() {
     <div class="profile-name">${player.name} MP</div>
     <div class="profile-meta">${player.party} · ${player.constituency}</div>
     <div class="profile-backstory">${player.backstory_text}</div>
+    <div class="profile-backstory" style="margin-top:10px;border-color:var(--accent)"><strong>Approval:</strong> ${player.approval_rating}% &nbsp;|&nbsp; <strong>Party Whip:</strong> ${player.party_standing}%</div>
   `;
 }
 
@@ -954,6 +962,7 @@ async function loadGameSettings() {
     if (s.ai_provider) document.getElementById('gs-provider').value = s.ai_provider;
     if (s.ai_model) document.getElementById('gs-model').value = s.ai_model;
     if (s.custom_endpoint) document.getElementById('gs-endpoint').value = s.custom_endpoint;
+    if (s.memory_context_limit) document.getElementById('gs-memory-limit').value = s.memory_context_limit;
     document.getElementById('gs-provider').addEventListener('change', function () {
       document.getElementById('gs-endpoint-group').classList.toggle('hidden', this.value !== 'custom');
     });
@@ -966,10 +975,23 @@ async function saveGameSettings() {
   const apiKey = document.getElementById('gs-apikey').value.trim();
   const model = document.getElementById('gs-model').value.trim();
   const endpoint = document.getElementById('gs-endpoint').value.trim();
-  await api('/api/settings', 'POST', { ai_provider: provider, api_key: apiKey || undefined, ai_model: model, custom_endpoint: endpoint });
+  const limit = document.getElementById('gs-memory-limit').value;
+  await api('/api/settings', 'POST', { ai_provider: provider, api_key: apiKey || undefined, ai_model: model, custom_endpoint: endpoint, memory_context_limit: limit });
   const notice = document.getElementById('gs-saved');
   notice.classList.remove('hidden');
   setTimeout(() => notice.classList.add('hidden'), 2000);
+}
+
+async function checkContext() {
+  const debug = document.getElementById('context-debug');
+  debug.classList.remove('hidden');
+  debug.textContent = 'Calculating...';
+  try {
+    const data = await api('/api/debug/context');
+    debug.innerHTML = `<strong>Estimated Context Tokens: ~${data.estimated_tokens}</strong> (Memories loaded: ${data.memory_count})<br><br><strong>Sample Payload Prefix:</strong><br>${escHtml(data.prompt)}`;
+  } catch (err) {
+    debug.textContent = `Error: ${err.message}`;
+  }
 }
 
 function newGame() {

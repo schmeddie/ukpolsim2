@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { getDb, getSetting, setSetting, getAllSettings } = require('./database');
-const { generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile } = require('./ai-service');
+const { generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile, getSampleContext } = require('./ai-service');
 const { generateMPs, generatePMName, SCENARIOS, CONSTITUENCIES } = require('./mp-generator');
 
 const app = express();
@@ -31,11 +31,12 @@ app.get('/api/settings', wrap((req, res) => {
 }));
 
 app.post('/api/settings', wrap((req, res) => {
-  const { ai_provider, api_key, ai_model, custom_endpoint } = req.body;
+  const { ai_provider, api_key, ai_model, custom_endpoint, memory_context_limit } = req.body;
   if (ai_provider !== undefined) setSetting('ai_provider', ai_provider);
   if (api_key !== undefined && !api_key.includes('•')) setSetting('api_key', api_key);
   if (ai_model !== undefined) setSetting('ai_model', ai_model);
   if (custom_endpoint !== undefined) setSetting('custom_endpoint', custom_endpoint);
+  if (memory_context_limit !== undefined) setSetting('memory_context_limit', memory_context_limit.toString());
   res.json({ ok: true });
 }));
 
@@ -103,6 +104,7 @@ app.post('/api/game/new', wrap((req, res) => {
   db.prepare('DELETE FROM emails').run();
   db.prepare('DELETE FROM calendar_events').run();
   db.prepare('DELETE FROM news_items').run();
+  db.prepare('DELETE FROM player_memories').run();
 
   const govSeats = scenario.seat_distribution[scenario.pm_party] || 0;
   const majority = govSeats > 325;
@@ -169,6 +171,9 @@ app.post('/api/game/advance', async (req, res, next) => {
     const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
     if (!player) return res.status(400).json({ error: 'No player' });
 
+    const memLimit = parseInt(getSetting('memory_context_limit') || '10');
+    const memories = db.prepare('SELECT game_date, memory_text FROM player_memories ORDER BY id DESC LIMIT ?').all([memLimit]).reverse();
+
     const currentDate = new Date(state.game_date);
     currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     const newDate = currentDate.toISOString().split('T')[0];
@@ -184,7 +189,7 @@ app.post('/api/game/advance', async (req, res, next) => {
     const results = { emails: false, news: false, events: false, errors: [] };
 
     try {
-      const emails = await generateEmails(newState, player, recentNews);
+      const emails = await generateEmails(newState, player, recentNews, memories);
       const insertEmail = db.prepare(`INSERT INTO emails (game_date, delivery_time, sender_name, sender_email, subject, body, email_type)
                                       VALUES (?, ?, ?, ?, ?, ?, ?)`);
       for (const e of emails) {
@@ -209,7 +214,7 @@ app.post('/api/game/advance', async (req, res, next) => {
 
     if (newDay % 5 === 0) {
       try {
-        const events = await generateCalendarEvents(newState, player);
+        const events = await generateCalendarEvents(newState, player, memories);
         const insertEvent = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
                                         VALUES (?, ?, ?, ?, ?, 1, 'pending')`);
         for (const e of events) {
@@ -223,7 +228,7 @@ app.post('/api/game/advance', async (req, res, next) => {
 
     // Generate Today's specific schedule
     try {
-      const dailyEvents = await generateDailyEvents(newState, player);
+      const dailyEvents = await generateDailyEvents(newState, player, memories);
       const insertDaily = db.prepare(`INSERT INTO calendar_events (event_date, event_time, title, description, event_type, is_generated, status)
                                       VALUES (?, ?, ?, ?, ?, 1, 'pending')`);
       for (const e of dailyEvents) {
@@ -261,10 +266,32 @@ app.post('/api/game/event/:id/resolve', wrap(async (req, res) => {
   
   const result = await resolveEventAction(state, player, event, action);
   
+  const newApproval = Math.max(0, Math.min(100, player.approval_rating + (result.approval_change || 0)));
+  const newParty = Math.max(0, Math.min(100, player.party_standing + (result.party_change || 0)));
+  
+  db.prepare('UPDATE player SET approval_rating = ?, party_standing = ? WHERE id = ?').run([newApproval, newParty, player.id]);
+  if (result.memory_note) {
+    db.prepare('INSERT INTO player_memories (game_date, memory_text) VALUES (?, ?)').run([state.game_date, result.memory_note]);
+  }
+  
   db.prepare('UPDATE calendar_events SET status = ?, outcome = ? WHERE id = ?')
     .run(['resolved', result.outcome, req.params.id]);
     
-  res.json({ outcome: result.outcome });
+  res.json({ outcome: result.outcome, approval_change: result.approval_change, party_change: result.party_change });
+}));
+
+app.get('/api/debug/context', wrap((req, res) => {
+  const db = getDb();
+  const state = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
+  const player = db.prepare('SELECT * FROM player ORDER BY id DESC LIMIT 1').get();
+  const memLimit = parseInt(getSetting('memory_context_limit') || '10');
+  const memories = db.prepare('SELECT game_date, memory_text FROM player_memories ORDER BY id DESC LIMIT ?').all([memLimit]).reverse();
+  const recentNews = db.prepare('SELECT headline FROM news_items ORDER BY id DESC LIMIT 5').all().map(n => n.headline);
+  
+  const prompt = getSampleContext(state, player, recentNews, memories);
+  const tokens = Math.ceil(prompt.length / 4);
+  
+  res.json({ prompt, estimated_tokens: tokens, memory_count: memories.length });
 }));
 
 // ─── MPs ─────────────────────────────────────────────────────────────────────

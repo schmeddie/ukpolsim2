@@ -761,6 +761,8 @@ h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
   max-width: 520px;
   width: 90%;
   position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .modal-close {
   position: absolute;

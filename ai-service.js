@@ -97,8 +97,10 @@ function getDefaultModel(provider) {
   }
 }
 
-async function generateEmails(gameState, player, recentEvents) {
+async function generateEmails(gameState, player, recentEvents, memories = []) {
   const { game_date, scenario_name, pm_name, pm_party } = gameState;
+  
+  const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
 
   const systemPrompt = `You are a creative writer for a UK political simulation game. Generate realistic, entertaining emails that an MP would receive.
 
@@ -108,7 +110,9 @@ GAME STATE:
 - Prime Minister: ${pm_name} (${pm_party})
 - Player character: ${player.name}, ${player.party} MP for ${player.constituency}
 - Player backstory: ${player.backstory_text}
+- Approval Rating: ${player.approval_rating}% | Party Standing: ${player.party_standing}%
 ${recentEvents.length > 0 ? `\nRECENT EVENTS:\n${recentEvents.map(e => `- ${e}`).join('\n')}` : ''}
+${memoryString}
 
 Generate between 4 and 6 emails. Mix serious political content with entertaining/absurd constituent issues. Include:
 - 1-2 constituent emails (can range from touching to hilariously petty)
@@ -164,8 +168,9 @@ Return ONLY a valid JSON array. Each object must have:
   return JSON.parse(jsonMatch[0]);
 }
 
-async function generateCalendarEvents(gameState, player) {
+async function generateCalendarEvents(gameState, player, memories = []) {
   const { game_date, scenario_name } = gameState;
+  const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
 
   const systemPrompt = `You are generating parliamentary calendar events for a UK political simulation game.
 
@@ -173,6 +178,7 @@ GAME STATE:
 - Date: ${game_date}
 - Scenario: ${scenario_name}
 - Player: ${player.name}, ${player.party} MP for ${player.constituency}
+${memoryString}
 
 Generate 3-5 upcoming parliamentary events for the next 2 weeks. Include a mix of:
 - PMQs / Oral Questions
@@ -199,11 +205,13 @@ Return ONLY a valid JSON array. Each object must have:
   return JSON.parse(jsonMatch[0]);
 }
 
-async function generateDailyEvents(gameState, player) {
+async function generateDailyEvents(gameState, player, memories = []) {
   const { game_date, scenario_name } = gameState;
+  const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
   const systemPrompt = `You are generating a daily event schedule for a UK political simulation game.
   Date: ${game_date}
   Player: ${player.name}, ${player.party} MP for ${player.constituency}
+  ${memoryString}
   
   Generate 2 to 4 career-focused political events for TODAY. Focus on parliamentary business, media ambushes, constituent crises, or party drama. Skip mundane personal things.
   
@@ -221,10 +229,15 @@ async function generateDailyEvents(gameState, player) {
 async function resolveEventAction(gameState, player, event, action) {
   const systemPrompt = `You are the game master for a UK political simulator.
   Player: ${player.name}, ${player.party} MP for ${player.constituency}.
+  Approval Rating: ${player.approval_rating}% | Party Standing: ${player.party_standing}%
   Event: ${event.title} - ${event.description}
   The MP decided to: "${action}"
   
-  Generate a realistic, immersive outcome for this action (2-3 sentences). Focus on the political consequences. Return ONLY a valid JSON object with the key "outcome".`;
+  Evaluate this action. Return ONLY a valid JSON object with the following keys:
+  - "outcome": string (a realistic, immersive outcome, 2-3 sentences)
+  - "approval_change": integer (between -10 and 10, how this affects public approval)
+  - "party_change": integer (between -10 and 10, how this affects their standing with the party whip)
+  - "memory_note": string (1 brief sentence summarizing the action and outcome to serve as long-term memory for future events)`;
   const content = await callAI([{ role: 'user', content: 'Resolve this action.' }], systemPrompt);
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   return JSON.parse(jsonMatch[0]);
@@ -274,4 +287,16 @@ async function generateMpProfile(gameState, mp) {
   return JSON.parse(jsonMatch[0]);
 }
 
-module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile };
+function getSampleContext(gameState, player, recentEvents, memories) {
+  const memoryString = memories.length ? `\nPLAYER MEMORY (Past Actions):\n${memories.map(m => `- [${m.game_date}] ${m.memory_text}`).join('\n')}` : '';
+  return `GAME STATE:
+- Date: ${gameState.game_date}
+- Scenario: ${gameState.scenario_name}
+- Prime Minister: ${gameState.pm_name} (${gameState.pm_party})
+- Player character: ${player.name}, ${player.party} MP for ${player.constituency}
+- Player backstory: ${player.backstory_text}
+- Approval Rating: ${player.approval_rating}% | Party Standing: ${player.party_standing}%
+${recentEvents.length > 0 ? `\nRECENT EVENTS:\n${recentEvents.map(e => `- ${e}`).join('\n')}` : ''}${memoryString}`;
+}
+
+module.exports = { callAI, generateEmails, generateNews, generateCalendarEvents, generateDailyEvents, resolveEventAction, generateEmailReply, generateNewsArticle, generateMpProfile, getSampleContext };
