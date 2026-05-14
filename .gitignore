@@ -1,0 +1,5 @@
+node_modules/
+game.db
+*.db-shm
+*.db-wal
+.env

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UK Political Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══ SCREENS ══════════════════════════════════════════════════════════════ -->
+
+<!-- Setup: API Config -->
+<div id="screen-setup" class="screen active">
+  <div class="setup-container">
+    <div class="crest">⚖️</div>
+    <h1>UK Political Simulator</h1>
+    <p class="subtitle">Configure your AI provider to get started</p>
+
+    <div class="card">
+      <div class="form-group">
+        <label>AI Provider</label>
+        <select id="setup-provider">
+          <option value="openai">OpenAI</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="custom">Custom / Compatible Endpoint</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="password" id="setup-apikey" placeholder="sk-..." autocomplete="off">
+      </div>
+      <div class="form-group" id="setup-model-group">
+        <label>Model</label>
+        <input type="text" id="setup-model" placeholder="gpt-4o-mini">
+      </div>
+      <div class="form-group hidden" id="setup-endpoint-group">
+        <label>Custom Endpoint URL</label>
+        <input type="text" id="setup-endpoint" placeholder="https://api.example.com/v1/chat/completions">
+      </div>
+      <div class="provider-note" id="provider-note"></div>
+      <button class="btn-primary" id="btn-save-settings">Save & Continue</button>
+    </div>
+
+    <p class="small-note">Your API key is stored locally in the game database on this machine only.</p>
+  </div>
+</div>
+
+<!-- Character Creation -->
+<div id="screen-character" class="screen">
+  <div class="setup-container wide">
+    <button class="btn-back" onclick="showScreen('screen-setup')">← Back</button>
+    <h2>Create Your MP</h2>
+    <p class="subtitle">You are a newly elected Member of Parliament</p>
+
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Your Full Name</label>
+          <input type="text" id="char-name" placeholder="e.g. James Fletcher">
+        </div>
+        <div class="form-group">
+          <label>Party</label>
+          <select id="char-party">
+            <option value="Labour">Labour</option>
+            <option value="Conservative">Conservative</option>
+            <option value="Liberal Democrats">Liberal Democrats</option>
+            <option value="SNP">Scottish National Party</option>
+            <option value="Plaid Cymru">Plaid Cymru</option>
+            <option value="Green">Green Party</option>
+            <option value="Reform UK">Reform UK</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Constituency</label>
+        <input type="text" id="char-constituency-input" placeholder="Search constituencies..." autocomplete="off">
+        <div id="constituency-dropdown" class="dropdown hidden"></div>
+        <input type="hidden" id="char-constituency">
+      </div>
+
+      <div class="form-group">
+        <label>Background / Backstory</label>
+        <div id="backstory-grid" class="backstory-grid"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Personal Bio <span class="optional">(optional)</span></label>
+        <textarea id="char-bio" rows="3" placeholder="A few lines about yourself..."></textarea>
+      </div>
+
+      <button class="btn-primary" id="btn-save-character">Continue to World Setup →</button>
+    </div>
+  </div>
+</div>
+
+<!-- World Selection -->
+<div id="screen-world" class="screen">
+  <div class="setup-container wide">
+    <button class="btn-back" onclick="showScreen('screen-character')">← Back</button>
+    <h2>Choose Your World</h2>
+    <p class="subtitle">Select the political landscape you'll navigate</p>
+    <div id="scenario-grid" class="scenario-grid"></div>
+    <button class="btn-primary" id="btn-start-game" disabled>Begin Simulation →</button>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="screen-loading" class="screen">
+  <div class="loading-container">
+    <div class="spinner"></div>
+    <h2 id="loading-title">Generating Parliament...</h2>
+    <p id="loading-sub">Filling 650 seats, dispatching whips, brewing tea</p>
+  </div>
+</div>
+
+<!-- ══ MAIN GAME ══════════════════════════════════════════════════════════════ -->
+
+<div id="screen-game" class="screen">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">⚖️ HM Westminster</span>
+    </div>
+    <div class="topbar-centre">
+      <span id="tb-date" class="topbar-date">—</span>
+      <span id="tb-day" class="topbar-daynum">Day 1</span>
+    </div>
+    <div class="topbar-right">
+      <span id="tb-player" class="topbar-player">—</span>
+      <span id="tb-party-badge" class="party-badge">—</span>
+    </div>
+  </header>
+
+  <!-- Nav -->
+  <nav class="sidenav">
+    <button class="nav-btn active" data-tab="dashboard">🏛️<span>Dashboard</span></button>
+    <button class="nav-btn" data-tab="inbox">✉️<span>Inbox <span id="unread-badge" class="badge hidden">0</span></span></button>
+    <button class="nav-btn" data-tab="calendar">📅<span>Calendar</span></button>
+    <button class="nav-btn" data-tab="parliament">🗳️<span>Parliament</span></button>
+    <button class="nav-btn" data-tab="mps">👥<span>MPs</span></button>
+    <button class="nav-btn" data-tab="settings-game">⚙️<span>Settings</span></button>
+    <button class="nav-btn advance-btn" id="btn-advance">
+      <span id="advance-label">⏭️ Next Day</span>
+      <div class="spinner-sm hidden" id="advance-spinner"></div>
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="content">
+
+    <!-- Dashboard -->
+    <div id="tab-dashboard" class="tab active">
+      <div class="tab-header">
+        <h2>Dashboard</h2>
+        <div id="news-ticker" class="news-ticker"></div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="widget widget-profile">
+          <h3>Your Profile</h3>
+          <div id="profile-card"></div>
+        </div>
+
+        <div class="widget widget-parliament">
+          <h3>Parliamentary Position</h3>
+          <div id="parliament-mini"></div>
+        </div>
+
+        <div class="widget widget-news">
+          <h3>Today's Headlines</h3>
+          <div id="news-list"></div>
+        </div>
+
+        <div class="widget widget-upcoming">
+          <h3>Upcoming Events</h3>
+          <div id="upcoming-events"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inbox -->
+    <div id="tab-inbox" class="tab">
+      <div class="tab-header">
+        <h2>Inbox</h2>
+        <div class="tab-actions">
+          <button class="btn-sm" id="btn-mark-all-read">Mark all read</button>
+        </div>
+      </div>
+      <div class="inbox-layout">
+        <div id="email-list" class="email-list"></div>
+        <div id="email-viewer" class="email-viewer">
+          <div class="email-placeholder">Select an email to read</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar -->
+    <div id="tab-calendar" class="tab">
+      <div class="tab-header"><h2>Parliamentary Calendar</h2></div>
+      <div id="calendar-view"></div>
+    </div>
+
+    <!-- Parliament -->
+    <div id="tab-parliament" class="tab">
+      <div class="tab-header"><h2>State of Parliament</h2></div>
+      <div id="parliament-view"></div>
+    </div>
+
+    <!-- MPs -->
+    <div id="tab-mps" class="tab">
+      <div class="tab-header">
+        <h2>Members of Parliament</h2>
+        <div class="tab-actions">
+          <input type="text" id="mp-search" placeholder="Search name or constituency...">
+          <select id="mp-party-filter">
+            <option value="">All parties</option>
+            <option value="Labour">Labour</option>
+            <option value="Conservative">Conservative</option>
+            <option value="Liberal Democrats">Liberal Democrats</option>
+            <option value="SNP">SNP</option>
+            <option value="Reform UK">Reform UK</option>
+            <option value="Green">Green</option>
+            <option value="Plaid Cymru">Plaid Cymru</option>
+          </select>
+          <select id="mp-region-filter">
+            <option value="">All regions</option>
+            <option value="London">London</option>
+            <option value="South East">South East</option>
+            <option value="South West">South West</option>
+            <option value="East of England">East of England</option>
+            <option value="East Midlands">East Midlands</option>
+            <option value="West Midlands">West Midlands</option>
+            <option value="Yorkshire">Yorkshire</option>
+            <option value="North West">North West</option>
+            <option value="North East">North East</option>
+            <option value="Scotland">Scotland</option>
+            <option value="Wales">Wales</option>
+            <option value="Northern Ireland">Northern Ireland</option>
+          </select>
+        </div>
+      </div>
+      <div id="mp-table-container">
+        <table id="mp-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Party</th><th>Constituency</th><th>Region</th><th>Role</th><th>Age</th>
+            </tr>
+          </thead>
+          <tbody id="mp-tbody"></tbody>
+        </table>
+        <div id="mp-pagination" class="pagination"></div>
+      </div>
+      <div id="mp-modal" class="modal hidden">
+        <div class="modal-content">
+          <button class="modal-close" onclick="closeMpModal()">✕</button>
+          <div id="mp-modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings (in-game) -->
+    <div id="tab-settings-game" class="tab">
+      <div class="tab-header"><h2>Settings</h2></div>
+      <div class="card settings-card">
+        <h3>AI Provider</h3>
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="gs-provider">
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="custom">Custom / Compatible Endpoint</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="gs-apikey" placeholder="Enter new key to change">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" id="gs-model" placeholder="gpt-4o-mini">
+        </div>
+        <div class="form-group" id="gs-endpoint-group">
+          <label>Custom Endpoint URL</label>
+          <input type="text" id="gs-endpoint">
+        </div>
+        <button class="btn-primary" id="btn-save-gs">Save Settings</button>
+        <div id="gs-saved" class="save-notice hidden">✓ Saved</div>
+      </div>
+
+      <div class="card settings-card danger-card">
+        <h3>New Game</h3>
+        <p>Start over with a new character and world.</p>
+        <button class="btn-danger" id="btn-new-game">New Game</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
