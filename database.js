@@ -7,11 +7,24 @@ let db;
 
 function getDb() {
   if (!db) {
+    // Clean up stale lock directory left by a hard-killed process
+    const lockDir = DB_PATH + '.lock';
+    try {
+      if (require('fs').existsSync(lockDir)) {
+        require('fs').rmdirSync(lockDir, { recursive: true });
+      }
+    } catch {}
     db = new Database(DB_PATH);
+    db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
     initSchema();
   }
   return db;
 }
+
+// Ensure DB is properly closed on exit so no stale locks are left
+process.on('exit', () => { try { db && db.close(); } catch {} });
+process.on('SIGINT', () => { try { db && db.close(); } catch {} process.exit(0); });
+process.on('SIGTERM', () => { try { db && db.close(); } catch {} process.exit(0); });
 
 function initSchema() {
   db.exec(`
@@ -33,7 +46,7 @@ function initSchema() {
 
     CREATE TABLE IF NOT EXISTS game_state (
       id INTEGER PRIMARY KEY DEFAULT 1,
-      current_date TEXT NOT NULL,
+      game_date TEXT NOT NULL,
       scenario_id TEXT NOT NULL,
       scenario_name TEXT NOT NULL,
       pm_name TEXT NOT NULL,
@@ -92,13 +105,13 @@ function initSchema() {
 
 function getSetting(key) {
   const db = getDb();
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get([key]);
   return row ? row.value : null;
 }
 
 function setSetting(key, value) {
   const db = getDb();
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run([key, value]);
 }
 
 function getAllSettings() {

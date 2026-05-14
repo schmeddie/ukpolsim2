@@ -78,12 +78,12 @@ function getDefaultModel(provider) {
 }
 
 async function generateEmails(gameState, player, recentEvents) {
-  const { current_date, scenario_name, pm_name, pm_party } = gameState;
+  const { game_date, scenario_name, pm_name, pm_party } = gameState;
 
   const systemPrompt = `You are a creative writer for a UK political simulation game. Generate realistic, entertaining emails that an MP would receive.
 
 GAME STATE:
-- Date: ${current_date}
+- Date: ${game_date}
 - Scenario: ${scenario_name}
 - Prime Minister: ${pm_name} (${pm_party})
 - Player character: ${player.name}, ${player.party} MP for ${player.constituency}
@@ -116,12 +116,12 @@ Make the tone vary: some urgent, some mundane, some amusing. Reference real UK p
 }
 
 async function generateNews(gameState, player) {
-  const { current_date, scenario_name, pm_name, pm_party } = gameState;
+  const { game_date, scenario_name, pm_name, pm_party } = gameState;
 
   const systemPrompt = `You are generating UK political news headlines for a simulation game.
 
 GAME STATE:
-- Date: ${current_date}
+- Date: ${game_date}
 - Scenario: ${scenario_name}
 - Prime Minister: ${pm_name} (${pm_party})
 
@@ -144,12 +144,12 @@ Return ONLY a valid JSON array. Each object must have:
 }
 
 async function generateCalendarEvents(gameState, player) {
-  const { current_date, scenario_name } = gameState;
+  const { game_date, scenario_name } = gameState;
 
   const systemPrompt = `You are generating parliamentary calendar events for a UK political simulation game.
 
 GAME STATE:
-- Date: ${current_date}
+- Date: ${game_date}
 - Scenario: ${scenario_name}
 - Player: ${player.name}, ${player.party} MP for ${player.constituency}
 
@@ -162,7 +162,7 @@ Generate 3-5 upcoming parliamentary events for the next 2 weeks. Include a mix o
 - Debates
 
 Return ONLY a valid JSON array. Each object must have:
-- "event_date": string (ISO date format, within 14 days of ${current_date})
+- "event_date": string (ISO date format, within 14 days of ${game_date})
 - "title": string
 - "description": string (1-2 sentences)
 - "event_type": one of "pmqs", "vote", "committee", "debate", "party", "constituency", "other"`;

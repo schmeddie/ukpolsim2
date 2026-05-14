@@ -298,7 +298,7 @@ function initGame() {
 
 function updateTopbar() {
   if (!gameState) return;
-  document.getElementById('tb-date').textContent = formatDate(gameState.current_date);
+  document.getElementById('tb-date').textContent = formatDate(gameState.game_date);
   document.getElementById('tb-day').textContent = `Day ${gameState.day_number}`;
   if (player) {
     document.getElementById('tb-player').textContent = player.name;
